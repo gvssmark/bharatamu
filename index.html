@@ -90,14 +90,41 @@
     background:#fff; color:var(--rust-dark); font-size:1rem; cursor:pointer;
   }
   .font-controls span{ font-size:0.85rem; color:var(--ink-soft); min-width:40px; text-align:center; }
-  .file-list, .bookmark-list{ list-style:none; margin:0; padding:0; }
-  .file-list li, .bookmark-list li{
+  .bookmark-list{ list-style:none; margin:0; padding:0; }
+  .bookmark-list li{
     padding: 8px 6px; font-size:0.88rem; border-radius:4px; cursor:pointer;
     color: var(--ink); display:flex; justify-content:space-between; gap:6px;
   }
-  .file-list li:active, .bookmark-list li:active{ background: var(--paper-soft); }
-  .file-list li.current{ background: var(--paper-soft); font-weight:bold; color:var(--rust-dark); }
+  .bookmark-list li:active{ background: var(--paper-soft); }
   .bookmark-list li .bm-num{ color:var(--rust-dark); font-weight:bold; flex:0 0 auto; }
+
+  /* ---------- Nav tree: parva > aswasam > topic ---------- */
+  .nav-tree{ font-size:0.88rem; }
+  .nav-tree details{ border-bottom: 1px dashed var(--line); }
+  .nav-tree details:last-child{ border-bottom:none; }
+  .nav-tree summary{
+    list-style:none; cursor:pointer; padding:9px 4px;
+    display:flex; align-items:center; gap:6px; color:var(--ink);
+  }
+  .nav-tree summary::-webkit-details-marker{ display:none; }
+  .nav-tree summary::before{
+    content:'▸'; display:inline-block; flex:0 0 auto; width:12px;
+    color:var(--rust-dark); transition: transform 0.15s ease;
+  }
+  .nav-tree details[open] > summary::before{ transform: rotate(90deg); }
+  .nav-parva > summary{ font-weight:bold; color:var(--rust-dark); font-size:0.95rem; }
+  .nav-aswasam{ margin-left:16px; }
+  .nav-aswasam > summary{ font-weight:600; }
+  .nav-label{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .nav-count{ flex:0 0 auto; color:var(--ink-soft); font-size:0.78rem; }
+  .nav-topics{ list-style:none; margin:0 0 4px; padding:0 0 0 28px; }
+  .nav-topics li{
+    padding: 7px 6px; border-radius:4px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; color:var(--ink-soft);
+  }
+  .nav-topics li:active{ background: var(--paper-soft); }
+  .nav-topics li.current{ background: var(--paper-soft); font-weight:bold; color:var(--rust-dark); }
+  .nav-topics li.current .nav-count{ color:var(--rust-dark); }
   .bookmark-list li .bm-del{ color:#a33; font-size:0.8rem; flex:0 0 auto; }
   .empty-note{ color: var(--ink-soft); font-size:0.82rem; padding: 4px 6px; }
   .drawer-btn{
@@ -267,8 +294,8 @@
       </div>
     </div>
     <div class="drawer-section">
-      <h4>ఆశ్వాసములు</h4>
-      <ul class="file-list" id="fileList"></ul>
+      <h4>విషయసూచిక</h4>
+      <div class="nav-tree" id="navTree"></div>
     </div>
     <div class="drawer-section">
       <h4>బుక్‌మార్కులు</h4>
@@ -327,7 +354,7 @@
   const nextBtn = $('nextBtn');
   const overlay = $('overlay');
   const drawer = $('drawer');
-  const fileListEl = $('fileList');
+  const navTreeEl = $('navTree');
   const bookmarkListEl = $('bookmarkList');
   const bookmarkEmpty = $('bookmarkEmpty');
   const fontLabel = $('fontLabel');
@@ -343,10 +370,14 @@
   function flattenData(data){
     const out = [];
     data.forEach(function(file){
+      const bc = file.breadcrumb || [];
+      const parvaRaw = bc.length >= 2 ? bc[bc.length - 2] : (bc[0] || 'మహాభారతము');
+      const parvaName = String(parvaRaw).replace(/\s+/g, ' ').trim();
       (file.sections || []).forEach(function(sec){
         (sec.padyams || []).forEach(function(p){
           out.push({
             fileName: file.fileName,
+            parva: parvaName,
             aswasam: (file.breadcrumb && file.breadcrumb[file.breadcrumb.length - 1]) || file.title || file.fileName,
             topic: sec.header || '',
             number: p.number,
@@ -369,11 +400,24 @@
       return false;
     }
     loaderScreen.classList.add('hidden');
-    buildFileList();
+    buildNavTree();
     restorePosition();
     renderTrack();
     goTo(currentIndex, false);
     return true;
+  }
+
+  function autoLoadFromServer(){
+    return fetch('padyams.json', { cache: 'no-store' })
+      .then(function(res){
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        cacheData(data);
+        return loadDataInto(data);
+      })
+      .catch(function(){ return false; });
   }
 
   function tryRestoreFromCache(){
@@ -524,7 +568,7 @@
     updateHeader();
     updateProgress();
     savePosition();
-    highlightFileListCurrent();
+    highlightNavTreeCurrent();
   }
 
   // ------------------------------------------------------------------
@@ -632,31 +676,98 @@
   $('closeDrawerBtn').addEventListener('click', closeDrawer);
   overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); });
 
-  function buildFileList(){
-    const seen = [];
-    const firstIdxByFile = {};
+  function buildNavTree(){
+    // Group screens into parva -> aswasam(file) -> topic, preserving first-seen order.
+    const parvaOrder = [];
+    const parvaMap = new Map();
     screens.forEach(function(s, idx){
-      if(firstIdxByFile[s.fileName] === undefined){
-        firstIdxByFile[s.fileName] = idx;
-        seen.push(s.fileName);
+      let pv = parvaMap.get(s.parva);
+      if(!pv){
+        pv = { count:0, aswasamOrder:[], aswasams:new Map() };
+        parvaMap.set(s.parva, pv);
+        parvaOrder.push(s.parva);
       }
+      pv.count++;
+
+      let asw = pv.aswasams.get(s.fileName);
+      if(!asw){
+        asw = { label: s.aswasam || s.fileName, count:0, firstIdx: idx, topicOrder:[], topics:new Map() };
+        pv.aswasams.set(s.fileName, asw);
+        pv.aswasamOrder.push(s.fileName);
+      }
+      asw.count++;
+
+      const topicKey = s.topic || '—';
+      let tp = asw.topics.get(topicKey);
+      if(!tp){
+        tp = { label: topicKey, count:0, firstIdx: idx };
+        asw.topics.set(topicKey, tp);
+        asw.topicOrder.push(topicKey);
+      }
+      tp.count++;
     });
-    fileListEl.innerHTML = '';
-    seen.forEach(function(fn){
-      const li = document.createElement('li');
-      li.dataset.file = fn;
-      li.textContent = screens[firstIdxByFile[fn]].aswasam || fn;
-      li.addEventListener('click', function(){
-        closeDrawer();
-        goTo(firstIdxByFile[fn]);
+
+    navTreeEl.innerHTML = '';
+    parvaOrder.forEach(function(parvaName){
+      const pv = parvaMap.get(parvaName);
+      const parvaDetails = document.createElement('details');
+      parvaDetails.className = 'nav-parva';
+      parvaDetails.open = parvaOrder.length === 1;
+
+      const parvaSummary = document.createElement('summary');
+      parvaSummary.innerHTML =
+        '<span class="nav-label">' + escapeHtml(parvaName) + '</span>' +
+        '<span class="nav-count">(' + pv.count + ')</span>';
+      parvaDetails.appendChild(parvaSummary);
+
+      pv.aswasamOrder.forEach(function(fileName){
+        const asw = pv.aswasams.get(fileName);
+        const aswDetails = document.createElement('details');
+        aswDetails.className = 'nav-aswasam';
+        aswDetails.dataset.file = fileName;
+
+        const aswSummary = document.createElement('summary');
+        aswSummary.innerHTML =
+          '<span class="nav-label">' + escapeHtml(asw.label) + '</span>' +
+          '<span class="nav-count">(' + asw.count + ')</span>';
+        aswDetails.appendChild(aswSummary);
+
+        const topicList = document.createElement('ul');
+        topicList.className = 'nav-topics';
+        asw.topicOrder.forEach(function(topicKey){
+          const tp = asw.topics.get(topicKey);
+          const li = document.createElement('li');
+          li.dataset.idx = tp.firstIdx;
+          li.innerHTML =
+            '<span class="nav-label">' + escapeHtml(tp.label) + '</span>' +
+            '<span class="nav-count">(' + tp.count + ')</span>';
+          li.addEventListener('click', function(){
+            closeDrawer();
+            goTo(tp.firstIdx);
+          });
+          topicList.appendChild(li);
+        });
+        aswDetails.appendChild(topicList);
+        parvaDetails.appendChild(aswDetails);
       });
-      fileListEl.appendChild(li);
+
+      navTreeEl.appendChild(parvaDetails);
     });
+
+    highlightNavTreeCurrent();
   }
-  function highlightFileListCurrent(){
-    const currentFile = screens[currentIndex] && screens[currentIndex].fileName;
-    Array.from(fileListEl.children).forEach(function(li){
-      li.classList.toggle('current', li.dataset.file === currentFile);
+
+  function highlightNavTreeCurrent(){
+    const s = screens[currentIndex];
+    if(!s || !navTreeEl.children.length) return;
+    const currentFile = s.fileName;
+    Array.from(navTreeEl.querySelectorAll('.nav-aswasam')).forEach(function(aswEl){
+      const isCurrentFile = aswEl.dataset.file === currentFile;
+      if(isCurrentFile) aswEl.open = true;
+      Array.from(aswEl.querySelectorAll('.nav-topics > li')).forEach(function(li){
+        const idx = Number(li.dataset.idx);
+        li.classList.toggle('current', isCurrentFile && screens[idx] && screens[idx].topic === s.topic);
+      });
     });
   }
 
@@ -781,7 +892,9 @@
   loadBookmarks();
   renderBookmarkList();
   applyFontScale();
-  tryRestoreFromCache();
+  autoLoadFromServer().then(function(ok){
+    if(!ok) tryRestoreFromCache();
+  });
 
   window.addEventListener('resize', function(){ goTo(currentIndex, false); });
 })();
