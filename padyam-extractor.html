@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Bharatamu Downloader</title>
+
+<style>
+    :root {
+        --maroon: #7a1f1f;
+        --maroon-dark: #5c1515;
+        --gold: #d69e00;
+        --bg: #f3f5f7;
+        --border: #d9d9d9;
+        --green: #237a3b;
+        --red: #a40000;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        padding: 30px 15px 50px;
+        font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        background: var(--bg);
+        color: #222;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 900px;
+        margin: auto;
+        background: #fff;
+        padding: 30px;
+        border-radius: 14px;
+        box-shadow: 0 5px 25px rgba(0,0,0,.10);
+    }
+
+    h1 {
+        margin: 0;
+        color: var(--maroon);
+        font-size: 30px;
+    }
+
+    .subtitle {
+        margin-top: 8px;
+        margin-bottom: 28px;
+        color: #666;
+        line-height: 1.5;
+    }
+
+    .section {
+        margin-top: 25px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 7px;
+        font-weight: bold;
+    }
+
+    select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #bbb;
+        border-radius: 7px;
+        background: white;
+        font-size: 16px;
+    }
+
+    .summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 22px;
+    }
+
+    .summary-box {
+        padding: 16px;
+        text-align: center;
+        background: #fafafa;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+    }
+
+    .summary-label {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .summary-value {
+        margin-top: 6px;
+        font-size: 25px;
+        font-weight: bold;
+        color: var(--maroon);
+    }
+
+    .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+    }
+
+    button {
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 7px;
+        font-size: 15px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    button:hover {
+        filter: brightness(.95);
+    }
+
+    .primary {
+        background: var(--maroon);
+        color: white;
+    }
+
+    .primary:hover {
+        background: var(--maroon-dark);
+    }
+
+    .secondary {
+        background: #e8e8e8;
+        color: #222;
+    }
+
+    .green {
+        background: var(--green);
+        color: white;
+    }
+
+    .file-list {
+        display: none;
+        margin-top: 20px;
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+    }
+
+    .file-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #eee;
+        font-family: Consolas, monospace;
+        font-size: 14px;
+    }
+
+    .file-item:last-child {
+        border-bottom: 0;
+    }
+
+    .url-preview {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f7f7f7;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+
+    .url-preview code {
+        font-family: Consolas, monospace;
+        font-size: 13px;
+        word-break: break-all;
+    }
+
+    .instructions {
+        margin-top: 28px;
+        padding: 18px;
+        background: #fff8e1;
+        border-left: 5px solid var(--gold);
+        border-radius: 5px;
+        line-height: 1.6;
+    }
+
+    .instructions ol {
+        margin-bottom: 0;
+    }
+
+    .status {
+        margin-top: 22px;
+        padding: 14px;
+        background: #f1f4f6;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+    }
+
+    .powershell-area {
+        display: none;
+        margin-top: 22px;
+    }
+
+    .powershell-area textarea {
+        width: 100%;
+        height: 350px;
+        resize: vertical;
+        padding: 14px;
+        border: 1px solid #bbb;
+        border-radius: 7px;
+        background: #171717;
+        color: #f0f0f0;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .small {
+        margin-top: 7px;
+        color: #666;
+        font-size: 13px;
+    }
+
+    @media (max-width: 650px) {
+        body {
+            padding: 15px 8px;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .form-grid,
+        .summary {
+            grid-template-columns: 1fr;
+        }
+
+        h1 {
+            font-size: 25px;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Bharatamu Downloader</h1>
+
+    <div class="subtitle">
+        Select a Parva and Asvasa. The page will calculate the correct
+        HTML range and generate a PowerShell downloader.
+    </div>
+
+
+    <!-- =====================================================
+         Selection
+         ===================================================== -->
+
+    <div class="form-grid">
+
+        <div>
+            <label for="parva">Parva</label>
+            <select id="parva"></select>
+        </div>
+
+        <div>
+            <label for="asvasa">Asvasa</label>
+            <select id="asvasa"></select>
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         Summary
+         ===================================================== -->
+
+    <div class="summary">
+
+        <div class="summary-box">
+            <div class="summary-label">
+                Starting HTML
+            </div>
+
+            <div class="summary-value" id="startNumber">
+                -
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <div class="summary-label">
+                Ending HTML
+            </div>
+
+            <div class="summary-value" id="endNumber">
+                -
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <div class="summary-label">
+                Total Files
+            </div>
+
+            <div class="summary-value" id="fileCount">
+                -
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         Buttons
+         ===================================================== -->
+
+    <div class="buttons">
+
+        <button
+            class="secondary"
+            id="showFilesButton">
+            Show Files
+        </button>
+
+        <button
+            class="primary"
+            id="generateButton">
+            Generate PowerShell
+        </button>
+
+        <button
+            class="green"
+            id="downloadScriptButton"
+            style="display:none;">
+            Download .ps1
+        </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         File list
+         ===================================================== -->
+
+    <div
+        id="fileList"
+        class="file-list">
+    </div>
+
+
+    <!-- =====================================================
+         URL preview
+         ===================================================== -->
+
+    <div class="url-preview">
+
+        <strong>URL pattern:</strong>
+
+        <br><br>
+
+        <code id="urlPreview">
+            -
+        </code>
+
+    </div>
+
+
+    <!-- =====================================================
+         Status
+         ===================================================== -->
+
+    <div class="status">
+
+        <strong>Status:</strong>
+
+        <span id="statusText">
+            Ready
+        </span>
+
+    </div>
+
+
+    <!-- =====================================================
+         PowerShell preview
+         ===================================================== -->
+
+    <div
+        class="powershell-area"
+        id="powershellArea">
+
+        <strong>
+            Generated PowerShell
+        </strong>
+
+        <div class="small">
+            You can inspect the script before downloading it.
+        </div>
+
+        <br>
+
+        <textarea
+            id="powershellCode"
+            readonly></textarea>
+
+    </div>
+
+
+    <!-- =====================================================
+         Instructions
+         ===================================================== -->
+
+    <div class="instructions">
+
+        <strong>How to use</strong>
+
+        <ol>
+            <li>Select the Parva.</li>
+            <li>Select the Asvasa.</li>
+            <li>Check the calculated HTML range.</li>
+            <li>Click <strong>Generate PowerShell</strong>.</li>
+            <li>Click <strong>Download .ps1</strong>.</li>
+            <li>Run the downloaded PowerShell script on Windows.</li>
+        </ol>
+
+        <div style="margin-top:12px;">
+            The actual downloading is performed by PowerShell,
+            not by GitHub Pages. This avoids the CORS restriction
+            on andhrabharati.com.
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/*
+=============================================================
+BHARATAMU MATRIX
+=============================================================
+
+Each value is the LAST HTML number for that
+Parva / Asvasa.
+
+The starting number is calculated:
+
+    start = Asvasa * 100 + 1
+
+Example:
+
+    Adi / Asvasa 3
+
+    start = 301
+    end   = 323
+=============================================================
+*/
+
+const matrix = {
+
+    "Adi": {
+        1: 117,
+        2: 222,
+        3: 323,
+        4: 429,
+        5: 531,
+        6: 636,
+        7: 734,
+        8: 830
+    },
+
+    "sabhA": {
+        1: 140,
+        2: 219
+    },
+
+    "AraNya": {
+        1: 122,
+        2: 218,
+        3: 327,
+        4: 421,
+        5: 530,
+        6: 624,
+        7: 724
+    },
+
+    "virATa": {
+        1: 116,
+        2: 222,
+        3: 313,
+        4: 416,
+        5: 521
+    },
+
+    "udyOga": {
+        1: 118,
+        2: 216,
+        3: 321,
+        4: 423
+    },
+
+    "bhIShma": {
+        1: 117,
+        2: 221,
+        3: 323
+    },
+
+    "drONa": {
+        1: 119,
+        2: 223,
+        3: 319,
+        4: 417,
+        5: 526
+    },
+
+    "karNa": {
+        1: 119,
+        2: 224,
+        3: 323
+    },
+
+    "Salya": {
+        1: 121,
+        2: 226
+    },
+
+    "sauptika": {
+        1: 114,
+        2: 210
+    },
+
+    "strI": {
+        1: 111,
+        2: 211
+    },
+
+    "SAMti": {
+        1: 124,
+        2: 227,
+        3: 335,
+        4: 424,
+        5: 536,
+        6: 632
+    },
+
+    "AnuSAsanika": {
+        1: 123,
+        2: 226,
+        3: 318,
+        4: 435
+    },
+
+    "aSvamEdha": {
+        1: 114,
+        2: 211,
+        3: 316,
+        4: 422
+    },
+
+    "ASramavAsa": {
+        1: 113,
+        2: 214
+    },
+
+    "mausala": {
+        1: 123
+    },
+
+    "mahAprasthAnika": {
+        1: 107
+    },
+
+    "svargArOhaNa": {
+        1: 110
+    }
+};
+
+
+/*
+=============================================================
+ELEMENTS
+=============================================================
+*/
+
+const parvaSelect =
+    document.getElementById("parva");
+
+const asvasaSelect =
+    document.getElementById("asvasa");
+
+const startNumber =
+    document.getElementById("startNumber");
+
+const endNumber =
+    document.getElementById("endNumber");
+
+const fileCount =
+    document.getElementById("fileCount");
+
+const showFilesButton =
+    document.getElementById("showFilesButton");
+
+const generateButton =
+    document.getElementById("generateButton");
+
+const downloadScriptButton =
+    document.getElementById("downloadScriptButton");
+
+const fileList =
+    document.getElementById("fileList");
+
+const urlPreview =
+    document.getElementById("urlPreview");
+
+const statusText =
+    document.getElementById("statusText");
+
+const powershellArea =
+    document.getElementById("powershellArea");
+
+const powershellCode =
+    document.getElementById("powershellCode");
+
+
+let generatedScript = "";
+
+
+/*
+=============================================================
+POPULATE PARVA
+=============================================================
+*/
+
+function populateParvas() {
+
+    parvaSelect.innerHTML = "";
+
+    Object.keys(matrix).forEach(parva => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = parva;
+        option.textContent = parva;
+
+        parvaSelect.appendChild(option);
+    });
+}
+
+
+/*
+=============================================================
+POPULATE ASVASA
+=============================================================
+*/
+
+function populateAsvasas() {
+
+    const parva =
+        parvaSelect.value;
+
+    asvasaSelect.innerHTML = "";
+
+    const entries =
+        matrix[parva];
+
+    Object.keys(entries)
+        .sort((a, b) => Number(a) - Number(b))
+        .forEach(number => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = number;
+
+            option.textContent =
+                "Asvasa " + number;
+
+            asvasaSelect.appendChild(option);
+        });
+
+    updateSummary();
+}
+
+
+/*
+=============================================================
+GET RANGE
+=============================================================
+*/
+
+function getRange() {
+
+    const parva =
+        parvaSelect.value;
+
+    const asvasa =
+        Number(asvasaSelect.value);
+
+    const start =
+        asvasa * 100 + 1;
+
+    const end =
+        matrix[parva][asvasa];
+
+    return {
+        parva,
+        asvasa,
+        start,
+        end,
+        count: end - start + 1
+    };
+}
+
+
+/*
+=============================================================
+GET URL
+=============================================================
+*/
+
+function getUrl(parva, number) {
+
+    return (
+        "https://www.andhrabharati.com/" +
+        "itihAsamulu/bhAratamu/" +
+        parva + "_" + number + ".html"
+    );
+}
+
+
+/*
+=============================================================
+GET FILENAME
+=============================================================
+*/
+
+function getFilename(parva, number) {
+
+    return parva + "_" + number + ".html";
+}
+
+
+/*
+=============================================================
+UPDATE SUMMARY
+=============================================================
+*/
+
+function updateSummary() {
+
+    const range =
+        getRange();
+
+    startNumber.textContent =
+        range.start;
+
+    endNumber.textContent =
+        range.end;
+
+    fileCount.textContent =
+        range.count;
+
+    urlPreview.textContent =
+        getUrl(range.parva, range.start);
+
+    fileList.style.display =
+        "none";
+
+    powershellArea.style.display =
+        "none";
+
+    downloadScriptButton.style.display =
+        "none";
+
+    statusText.textContent =
+        "Ready";
+
+    generatedScript = "";
+}
+
+
+/*
+=============================================================
+SHOW FILES
+=============================================================
+*/
+
+function showFiles() {
+
+    const range =
+        getRange();
+
+    fileList.innerHTML = "";
+
+    for (
+        let number = range.start;
+        number <= range.end;
+        number++
+    ) {
+
+        const div =
+            document.createElement("div");
+
+        div.className =
+            "file-item";
+
+        div.textContent =
+            getFilename(range.parva, number);
+
+        fileList.appendChild(div);
+    }
+
+    fileList.style.display =
+        "block";
+
+    statusText.textContent =
+        `${range.count} file(s) listed.`;
+}
+
+
+/*
+=============================================================
+ESCAPE POWERSHELL SINGLE-QUOTED STRING
+=============================================================
+
+PowerShell strings are enclosed with single quotes.
+
+A single quote inside a PowerShell single-quoted
+string is represented by two single quotes.
+=============================================================
+*/
+
+function psQuote(value) {
+
+    return "'" +
+        String(value).replace(/'/g, "''") +
+        "'";
+}
+
+
+/*
+=============================================================
+GENERATE POWERSHELL
+=============================================================
+*/
+
+function generatePowerShell() {
+
+    const range =
+        getRange();
+
+    const folderName =
+        range.parva +
+        "_Asvasa_" +
+        range.asvasa;
+
+    const lines = [];
+
+    lines.push(
+        "# ====================================================="
+    );
+
+    lines.push(
+        "# Bharatamu Downloader"
+    );
+
+    lines.push(
+        `# Parva   : ${range.parva}`
+    );
+
+    lines.push(
+        `# Asvasa  : ${range.asvasa}`
+    );
+
+    lines.push(
+        `# Range   : ${range.start} - ${range.end}`
+    );
+
+    lines.push(
+        `# Files   : ${range.count}`
+    );
+
+    lines.push(
+        "# ====================================================="
+    );
+
+    lines.push("");
+
+    lines.push(
+        "$ErrorActionPreference = 'Continue'"
+    );
+
+    lines.push("");
+
+    lines.push(
+        `$folder = ${psQuote(folderName)}`
+    );
+
+    lines.push("");
+
+    lines.push(
+        "New-Item -ItemType Directory -Force -Path $folder | Out-Null"
+    );
+
+    lines.push("");
+
+    lines.push(
+        "Set-Location $folder"
+    );
+
+    lines.push("");
+
+    lines.push(
+        "$success = @()"
+    );
+
+    lines.push(
+        "$failed = @()"
+    );
+
+    lines.push("");
+
+    lines.push(
+        `Write-Host "Parva: ${range.parva}"`
+    );
+
+    lines.push(
+        `Write-Host "Asvasa: ${range.asvasa}"`
+    );
+
+    lines.push(
+        `Write-Host "Range: ${range.start} - ${range.end}"`
+    );
+
+    lines.push(
+        `Write-Host "Total files: ${range.count}"`
+    );
+
+    lines.push("");
+
+    lines.push(
+        `for ($i = ${range.start}; $i -le ${range.end}; $i++) {`
+    );
+
+    lines.push("");
+
+    lines.push(
+        `    $url = "https://www.andhrabharati.com/itihAsamulu/bhAratamu/${range.parva}_$i.html"`
+    );
+
+    lines.push(
+        `    $out = "${range.parva}_$i.html"`
+    );
+
+    lines.push("");
+
+    lines.push(
+        '    Write-Host "Downloading $out" -ForegroundColor Cyan'
+    );
+
+    lines.push("");
+
+    lines.push(
+        "    try {"
+    );
+
+    lines.push("");
+
+    lines.push(
+        '        Invoke-WebRequest `'
+    );
+
+    lines.push(
+        '            -Uri $url `'
+    );
+
+    lines.push(
+        '            -OutFile $out `'
+    );
+
+    lines.push(
+        '            -UserAgent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" `'
+    );
+
+    lines.push(
+        '            -UseBasicParsing'
+    );
+
+    lines.push("");
+
+    lines.push(
+        '        Write-Host "Downloaded $out" -ForegroundColor Green'
+    );
+
+    lines.push(
+        "        $success += $out"
+    );
+
+    lines.push("");
+
+    lines.push(
+        "    }"
+    );
+
+    lines.push(
+        "    catch {"
+    );
+
+    lines.push("");
+
+    lines.push(
+        '        Write-Host "FAILED $out" -ForegroundColor Red'
+    );
+
+    lines.push(
+        '        Write-Host $_ -ForegroundColor Red'
+    );
+
+    lines.push(
+        "        $failed += $out"
+    );
+
+    lines.push("");
+
+    lines.push(
+        "    }"
+    );
+
+    lines.push("");
+
+    lines.push(
+        "    Start-Sleep -Seconds 1"
+    );
+
+    lines.push("}");
+
+    lines.push("");
+
+    lines.push(
+        'Write-Host ""'
+    );
+
+    lines.push(
+        'Write-Host "====================================================="'
+    );
+
+    lines.push(
+        'Write-Host "DOWNLOAD SUMMARY"'
+    );
+
+    lines.push(
+        'Write-Host "====================================================="'
+    );
+
+    lines.push("");
+
+    lines.push(
+        'Write-Host ("Successful: " + $success.Count) -ForegroundColor Green'
+    );
+
+    lines.push(
+        'Write-Host ("Failed:     " + $failed.Count) -ForegroundColor Red'
+    );
+
+    lines.push("");
+
+    lines.push(
+        "if ($failed.Count -gt 0) {"
+    );
+
+    lines.push(
+        '    Write-Host ""'
+    );
+
+    lines.push(
+        '    Write-Host "Failed files:" -ForegroundColor Red'
+    );
+
+    lines.push("");
+
+    lines.push(
+        "    $failed | ForEach-Object {"
+    );
+
+    lines.push(
+        '        Write-Host ("  " + $_) -ForegroundColor Red'
+    );
+
+    lines.push(
+        "    }"
+    );
+
+    lines.push("}");
+
+    lines.push("");
+
+    lines.push(
+        'Write-Host ""'
+    );
+
+    lines.push(
+        'Write-Host "Output folder:" -ForegroundColor Yellow'
+    );
+
+    lines.push(
+        'Write-Host (Get-Location).Path -ForegroundColor Yellow'
+    );
+
+    lines.push("");
+
+    lines.push(
+        'Write-Host ""'
+    );
+
+    lines.push(
+        'Write-Host "Finished." -ForegroundColor Cyan'
+    );
+
+    generatedScript =
+        lines.join("\n");
+
+    powershellCode.value =
+        generatedScript;
+
+    powershellArea.style.display =
+        "block";
+
+    downloadScriptButton.style.display =
+        "inline-block";
+
+    statusText.textContent =
+        "PowerShell script generated.";
+
+    powershellArea.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+
+/*
+=============================================================
+DOWNLOAD .PS1
+=============================================================
+*/
+
+function downloadPowerShell() {
+
+    if (!generatedScript) {
+        return;
+    }
+
+    const range =
+        getRange();
+
+    const filename =
+        "download_" +
+        range.parva +
+        "_Asvasa_" +
+        range.asvasa +
+        ".ps1";
+
+    const blob =
+        new Blob(
+            [generatedScript],
+            {
+                type:
+                    "text/plain;charset=utf-8"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    const link =
+        document.createElement("a");
+
+    link.href =
+        url;
+
+    link.download =
+        filename;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(url);
+
+    statusText.textContent =
+        `Saved ${filename}`;
+}
+
+
+/*
+=============================================================
+EVENTS
+=============================================================
+*/
+
+parvaSelect.addEventListener(
+    "change",
+    populateAsvasas
+);
+
+asvasaSelect.addEventListener(
+    "change",
+    updateSummary
+);
+
+showFilesButton.addEventListener(
+    "click",
+    showFiles
+);
+
+generateButton.addEventListener(
+    "click",
+    generatePowerShell
+);
+
+downloadScriptButton.addEventListener(
+    "click",
+    downloadPowerShell
+);
+
+
+/*
+=============================================================
+INITIALIZE
+=============================================================
+*/
+
+populateParvas();
+
+populateAsvasas();
+
+</script>
+
+</body>
+</html>

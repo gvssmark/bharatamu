@@ -1,1250 +1,790 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="te">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Bharatamu Downloader</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<title>ఆంధ్రమహాభారతము — Reader</title>
 <style>
-    :root {
-        --maroon: #7a1f1f;
-        --maroon-dark: #5c1515;
-        --gold: #d69e00;
-        --bg: #f3f5f7;
-        --border: #d9d9d9;
-        --green: #237a3b;
-        --red: #a40000;
-    }
+  :root{
+    --bg: #1b140d;
+    --paper: #fbf3e2;
+    --paper-soft: #f4e9d0;
+    --ink: #2a1e12;
+    --ink-soft: #6b5940;
+    --rust: #b5502f;
+    --rust-dark: #8a3a20;
+    --gold: #c79a3f;
+    --leaf: #566b45;
+    --line: #d9c69b;
+    --shadow: 0 6px 24px rgba(0,0,0,0.35);
+    --verse-size: 1.15rem;
+    --header-h: 84px;
+    --nav-h: 64px;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background: var(--bg);
+    font-family: Georgia, 'Noto Serif Telugu', serif;
+    color: var(--ink);
+  }
+  #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
 
-    * {
-        box-sizing: border-box;
-    }
+  /* ---------- Fixed header ---------- */
+  header{
+    position:relative; z-index:20;
+    height: var(--header-h);
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, var(--rust) 0%, var(--rust-dark) 100%);
+    color: #fdf3e2;
+    display:flex; flex-direction:column; justify-content:center;
+    padding: 8px 12px 10px;
+    box-shadow: var(--shadow);
+  }
+  .hdr-row{ display:flex; align-items:center; gap:10px; }
+  .icon-btn{
+    background:none; border:none; color:#fdf3e2; font-size:1.4rem;
+    width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; border-radius:50%; flex:0 0 auto;
+  }
+  .icon-btn:active{ background: rgba(255,255,255,0.15); }
+  .hdr-title{
+    flex:1; text-align:center; font-size:1.15rem; letter-spacing:0.5px;
+    font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .hdr-sub{
+    margin-top: 3px;
+    text-align:center; font-size: 0.8rem; color: #f2dcb8;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding: 0 6px;
+  }
 
-    body {
-        margin: 0;
-        padding: 30px 15px 50px;
-        font-family:
-            Arial,
-            Helvetica,
-            sans-serif;
-        background: var(--bg);
-        color: #222;
-    }
+  /* ---------- Side drawer ---------- */
+  #overlay{
+    position:fixed; inset:0; background: rgba(0,0,0,0.45);
+    opacity:0; pointer-events:none; transition: opacity 0.25s ease; z-index:30;
+  }
+  #overlay.show{ opacity:1; pointer-events:auto; }
+  #drawer{
+    position:fixed; top:0; bottom:0; left:0; width: min(320px, 84vw);
+    background: var(--paper); z-index:31;
+    transform: translateX(-105%); transition: transform 0.28s ease;
+    display:flex; flex-direction:column;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+  }
+  #drawer.show{ transform: translateX(0); }
+  .drawer-hdr{
+    padding: 18px 16px 12px; background: var(--rust); color:#fff;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .drawer-hdr b{ font-size:1.05rem; }
+  .drawer-body{ flex:1; overflow-y:auto; padding: 10px 0 20px; }
+  .drawer-section{ padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .drawer-section h4{
+    margin:0 0 8px; font-size:0.72rem; letter-spacing:1px; text-transform:uppercase;
+    color: var(--rust-dark);
+  }
+  .font-controls{ display:flex; align-items:center; gap:10px; }
+  .font-controls button{
+    width:36px; height:36px; border-radius:6px; border:1px solid var(--rust);
+    background:#fff; color:var(--rust-dark); font-size:1rem; cursor:pointer;
+  }
+  .font-controls span{ font-size:0.85rem; color:var(--ink-soft); min-width:40px; text-align:center; }
+  .file-list, .bookmark-list{ list-style:none; margin:0; padding:0; }
+  .file-list li, .bookmark-list li{
+    padding: 8px 6px; font-size:0.88rem; border-radius:4px; cursor:pointer;
+    color: var(--ink); display:flex; justify-content:space-between; gap:6px;
+  }
+  .file-list li:active, .bookmark-list li:active{ background: var(--paper-soft); }
+  .file-list li.current{ background: var(--paper-soft); font-weight:bold; color:var(--rust-dark); }
+  .bookmark-list li .bm-num{ color:var(--rust-dark); font-weight:bold; flex:0 0 auto; }
+  .bookmark-list li .bm-del{ color:#a33; font-size:0.8rem; flex:0 0 auto; }
+  .empty-note{ color: var(--ink-soft); font-size:0.82rem; padding: 4px 6px; }
+  .drawer-btn{
+    width:100%; text-align:left; background:none; border:none; padding:9px 6px;
+    font-size:0.88rem; color: var(--rust-dark); cursor:pointer; font-family:inherit;
+  }
 
-    .container {
-        width: 100%;
-        max-width: 900px;
-        margin: auto;
-        background: #fff;
-        padding: 30px;
-        border-radius: 14px;
-        box-shadow: 0 5px 25px rgba(0,0,0,.10);
-    }
+  /* ---------- Stage ---------- */
+  #stage{
+    position:relative; flex:1; overflow:hidden;
+    background:
+      radial-gradient(ellipse at top, #2a2015 0%, var(--bg) 60%);
+  }
+  #track{
+    position:absolute; inset:0;
+    display:flex;
+    will-change: transform;
+  }
+  .screen{
+    flex: 0 0 100%; width:100%; height:100%;
+    display:flex; flex-direction:column;
+    padding: 10px 4px 0;
+  }
+  .verse-pane{
+    flex: 1 1 55%; min-height: 0;
+    background: var(--paper);
+    margin: 0 10px; border-radius: 10px 10px 0 0;
+    box-shadow: var(--shadow);
+    overflow-y:auto; padding: 18px 18px 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .verse-meta{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .verse-badge{
+    background: var(--leaf); color:#fff; font-size:0.72rem; font-weight:bold;
+    padding: 3px 10px; border-radius: 12px;
+  }
+  .verse-type{ color: var(--rust-dark); font-weight:bold; font-size:0.85rem; }
+  .verse-star{
+    margin-left:auto; background:none; border:none; font-size:1.3rem; cursor:pointer;
+    color: var(--gold); opacity:0.4;
+  }
+  .verse-star.on{ opacity:1; }
+  .verse-part + .verse-part{ margin-top: 14px; }
+  .verse-part .ptype{ font-size:0.78rem; color:var(--ink-soft); margin-bottom:2px; }
+  .verse-text{
+    font-size: var(--verse-size); line-height:1.75; white-space:pre-line;
+  }
 
-    h1 {
-        margin: 0;
-        color: var(--maroon);
-        font-size: 30px;
-    }
+  .meaning-pane{
+    flex: 1 1 45%; min-height:0;
+    background: var(--paper-soft);
+    margin: 0 10px; border-radius: 0 0 10px 10px;
+    box-shadow: var(--shadow);
+    overflow-y:auto; padding: 14px 18px 18px;
+    border-top: 2px dashed var(--line);
+    -webkit-overflow-scrolling: touch;
+  }
+  .meaning-pane h5{
+    margin: 0 0 6px; font-size:0.72rem; letter-spacing:1px; text-transform:uppercase;
+    color: var(--rust-dark);
+  }
+  .meaning-text{ font-size:0.98rem; line-height:1.6; color: var(--ink); white-space:pre-line; }
+  .meaning-empty{ font-size:0.88rem; color: var(--ink-soft); font-style:italic; }
 
-    .subtitle {
-        margin-top: 8px;
-        margin-bottom: 28px;
-        color: #666;
-        line-height: 1.5;
-    }
+  .resize-handle{
+    flex:0 0 auto; height:14px; margin: 0 10px; cursor:ns-resize;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--paper-soft);
+  }
+  .resize-handle::before{
+    content:""; width:36px; height:4px; border-radius:2px; background: var(--line);
+  }
 
-    .section {
-        margin-top: 25px;
-    }
+  /* ---------- Bottom nav ---------- */
+  #bottomnav{
+    flex:0 0 auto; height: var(--nav-h);
+    background: #150f0a; color:#f2e3c5;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 0 10px; z-index:20;
+  }
+  #bottomnav button{
+    background:none; border:none; color:#f2e3c5; font-size:1rem; cursor:pointer;
+    padding: 8px 14px; border-radius:6px; display:flex; align-items:center; gap:6px;
+  }
+  #bottomnav button:disabled{ opacity:0.3; }
+  #bottomnav button:active:not(:disabled){ background: rgba(255,255,255,0.1); }
+  #progress{ font-size:0.78rem; color:#c9b98c; text-align:center; }
+  #progress b{ color:#f2e3c5; }
 
-    .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 18px;
-    }
+  /* ---------- Search overlay ---------- */
+  #searchOverlay{
+    position:fixed; inset:0; background: var(--bg); z-index:40;
+    display:flex; flex-direction:column;
+    transform: translateY(-100%); transition: transform 0.25s ease;
+  }
+  #searchOverlay.show{ transform: translateY(0); }
+  .search-hdr{
+    flex:0 0 auto; display:flex; align-items:center; gap:8px;
+    padding: 14px 12px; background: var(--rust-dark);
+  }
+  .search-hdr input{
+    flex:1; padding:10px 12px; border-radius:8px; border:none; font-size:1rem;
+    font-family: inherit; background:#fff8ea;
+  }
+  .search-results{ flex:1; overflow-y:auto; background: var(--paper); padding: 6px 0; }
+  .search-item{ padding: 12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .search-item:active{ background: var(--paper-soft); }
+  .search-item .si-loc{ font-size:0.72rem; color: var(--rust-dark); margin-bottom:3px; }
+  .search-item .si-text{ font-size:0.9rem; color: var(--ink); line-height:1.4; }
+  .search-item mark{ background: #f4d98a; color: inherit; }
+  .search-empty{ padding: 24px; text-align:center; color: var(--ink-soft); }
 
-    label {
-        display: block;
-        margin-bottom: 7px;
-        font-weight: bold;
-    }
-
-    select {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid #bbb;
-        border-radius: 7px;
-        background: white;
-        font-size: 16px;
-    }
-
-    .summary {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        margin-top: 22px;
-    }
-
-    .summary-box {
-        padding: 16px;
-        text-align: center;
-        background: #fafafa;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-    }
-
-    .summary-label {
-        font-size: 13px;
-        color: #666;
-    }
-
-    .summary-value {
-        margin-top: 6px;
-        font-size: 25px;
-        font-weight: bold;
-        color: var(--maroon);
-    }
-
-    .buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 24px;
-    }
-
-    button {
-        padding: 12px 18px;
-        border: 0;
-        border-radius: 7px;
-        font-size: 15px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    button:hover {
-        filter: brightness(.95);
-    }
-
-    .primary {
-        background: var(--maroon);
-        color: white;
-    }
-
-    .primary:hover {
-        background: var(--maroon-dark);
-    }
-
-    .secondary {
-        background: #e8e8e8;
-        color: #222;
-    }
-
-    .green {
-        background: var(--green);
-        color: white;
-    }
-
-    .file-list {
-        display: none;
-        margin-top: 20px;
-        max-height: 350px;
-        overflow-y: auto;
-        border: 1px solid var(--border);
-        border-radius: 7px;
-    }
-
-    .file-item {
-        padding: 8px 12px;
-        border-bottom: 1px solid #eee;
-        font-family: Consolas, monospace;
-        font-size: 14px;
-    }
-
-    .file-item:last-child {
-        border-bottom: 0;
-    }
-
-    .url-preview {
-        margin-top: 20px;
-        padding: 15px;
-        background: #f7f7f7;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow-x: auto;
-    }
-
-    .url-preview code {
-        font-family: Consolas, monospace;
-        font-size: 13px;
-        word-break: break-all;
-    }
-
-    .instructions {
-        margin-top: 28px;
-        padding: 18px;
-        background: #fff8e1;
-        border-left: 5px solid var(--gold);
-        border-radius: 5px;
-        line-height: 1.6;
-    }
-
-    .instructions ol {
-        margin-bottom: 0;
-    }
-
-    .status {
-        margin-top: 22px;
-        padding: 14px;
-        background: #f1f4f6;
-        border: 1px solid var(--border);
-        border-radius: 7px;
-    }
-
-    .powershell-area {
-        display: none;
-        margin-top: 22px;
-    }
-
-    .powershell-area textarea {
-        width: 100%;
-        height: 350px;
-        resize: vertical;
-        padding: 14px;
-        border: 1px solid #bbb;
-        border-radius: 7px;
-        background: #171717;
-        color: #f0f0f0;
-        font-family: Consolas, "Courier New", monospace;
-        font-size: 13px;
-        line-height: 1.45;
-    }
-
-    .small {
-        margin-top: 7px;
-        color: #666;
-        font-size: 13px;
-    }
-
-    @media (max-width: 650px) {
-        body {
-            padding: 15px 8px;
-        }
-
-        .container {
-            padding: 20px;
-        }
-
-        .form-grid,
-        .summary {
-            grid-template-columns: 1fr;
-        }
-
-        h1 {
-            font-size: 25px;
-        }
-    }
+  /* ---------- Loader ---------- */
+  #loaderScreen{
+    position:fixed; inset:0; z-index:50; background: var(--bg);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px;
+    color: #f2e3c5; padding: 24px; text-align:center;
+  }
+  #loaderScreen h1{ font-size:1.4rem; color: var(--gold); margin:0; }
+  #loaderScreen p{ color:#c9b98c; font-size:0.9rem; max-width:340px; margin:0; }
+  .load-btn{
+    background: var(--rust); color:#fff; border:none; padding: 13px 26px;
+    border-radius: 8px; font-size:1rem; cursor:pointer;
+  }
+  #fileInput{ display:none; }
+  .hidden{ display:none !important; }
 </style>
 </head>
-
 <body>
 
-<div class="container">
+<div id="app">
 
-    <h1>Bharatamu Downloader</h1>
-
-    <div class="subtitle">
-        Select a Parva and Asvasa. The page will calculate the correct
-        HTML range and generate a PowerShell downloader.
+  <header>
+    <div class="hdr-row">
+      <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
+      <div class="hdr-title" id="hdrTitle">ఆంధ్రమహాభారతము</div>
+      <button class="icon-btn" id="searchBtn" aria-label="Search">🔍</button>
     </div>
+    <div class="hdr-sub" id="hdrSub">—</div>
+  </header>
 
+  <div id="stage">
+    <div id="track"></div>
+  </div>
 
-    <!-- =====================================================
-         Selection
-         ===================================================== -->
-
-    <div class="form-grid">
-
-        <div>
-            <label for="parva">Parva</label>
-            <select id="parva"></select>
-        </div>
-
-        <div>
-            <label for="asvasa">Asvasa</label>
-            <select id="asvasa"></select>
-        </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         Summary
-         ===================================================== -->
-
-    <div class="summary">
-
-        <div class="summary-box">
-            <div class="summary-label">
-                Starting HTML
-            </div>
-
-            <div class="summary-value" id="startNumber">
-                -
-            </div>
-        </div>
-
-        <div class="summary-box">
-            <div class="summary-label">
-                Ending HTML
-            </div>
-
-            <div class="summary-value" id="endNumber">
-                -
-            </div>
-        </div>
-
-        <div class="summary-box">
-            <div class="summary-label">
-                Total Files
-            </div>
-
-            <div class="summary-value" id="fileCount">
-                -
-            </div>
-        </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         Buttons
-         ===================================================== -->
-
-    <div class="buttons">
-
-        <button
-            class="secondary"
-            id="showFilesButton">
-            Show Files
-        </button>
-
-        <button
-            class="primary"
-            id="generateButton">
-            Generate PowerShell
-        </button>
-
-        <button
-            class="green"
-            id="downloadScriptButton"
-            style="display:none;">
-            Download .ps1
-        </button>
-
-    </div>
-
-
-    <!-- =====================================================
-         File list
-         ===================================================== -->
-
-    <div
-        id="fileList"
-        class="file-list">
-    </div>
-
-
-    <!-- =====================================================
-         URL preview
-         ===================================================== -->
-
-    <div class="url-preview">
-
-        <strong>URL pattern:</strong>
-
-        <br><br>
-
-        <code id="urlPreview">
-            -
-        </code>
-
-    </div>
-
-
-    <!-- =====================================================
-         Status
-         ===================================================== -->
-
-    <div class="status">
-
-        <strong>Status:</strong>
-
-        <span id="statusText">
-            Ready
-        </span>
-
-    </div>
-
-
-    <!-- =====================================================
-         PowerShell preview
-         ===================================================== -->
-
-    <div
-        class="powershell-area"
-        id="powershellArea">
-
-        <strong>
-            Generated PowerShell
-        </strong>
-
-        <div class="small">
-            You can inspect the script before downloading it.
-        </div>
-
-        <br>
-
-        <textarea
-            id="powershellCode"
-            readonly></textarea>
-
-    </div>
-
-
-    <!-- =====================================================
-         Instructions
-         ===================================================== -->
-
-    <div class="instructions">
-
-        <strong>How to use</strong>
-
-        <ol>
-            <li>Select the Parva.</li>
-            <li>Select the Asvasa.</li>
-            <li>Check the calculated HTML range.</li>
-            <li>Click <strong>Generate PowerShell</strong>.</li>
-            <li>Click <strong>Download .ps1</strong>.</li>
-            <li>Run the downloaded PowerShell script on Windows.</li>
-        </ol>
-
-        <div style="margin-top:12px;">
-            The actual downloading is performed by PowerShell,
-            not by GitHub Pages. This avoids the CORS restriction
-            on andhrabharati.com.
-        </div>
-
-    </div>
+  <div id="bottomnav">
+    <button id="prevBtn">◀ &nbsp;మునుపటి</button>
+    <div id="progress">— / —</div>
+    <button id="nextBtn">తరువాత&nbsp; ▶</button>
+  </div>
 
 </div>
 
+<div id="overlay"></div>
+<div id="drawer">
+  <div class="drawer-hdr">
+    <b>మెనూ</b>
+    <button class="icon-btn" id="closeDrawerBtn" style="color:#fff;">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section">
+      <h4>అక్షర పరిమాణం</h4>
+      <div class="font-controls">
+        <button id="fontMinus">A−</button>
+        <span id="fontLabel">100%</span>
+        <button id="fontPlus">A+</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h4>ఆశ్వాసములు</h4>
+      <ul class="file-list" id="fileList"></ul>
+    </div>
+    <div class="drawer-section">
+      <h4>బుక్‌మార్కులు</h4>
+      <ul class="bookmark-list" id="bookmarkList"></ul>
+      <div class="empty-note" id="bookmarkEmpty">బుక్‌మార్కులు లేవు</div>
+    </div>
+    <div class="drawer-section">
+      <button class="drawer-btn" id="loadNewBtn">📁 వేరే JSON ఫైల్ లోడ్ చేయండి</button>
+    </div>
+  </div>
+</div>
+
+<div id="searchOverlay">
+  <div class="search-hdr">
+    <button class="icon-btn" id="closeSearchBtn">✕</button>
+    <input type="text" id="searchInput" placeholder="పద్యంలో వెతకండి…">
+  </div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<div id="loaderScreen">
+  <h1>ఆంధ్రమహాభారతము</h1>
+  <p>మీరు padyam-extractor tool తో తయారుచేసిన JSON ఫైల్‌ను ఎంచుకోండి. (Load the padyams.json produced by the extractor tool.)</p>
+  <button class="load-btn" id="pickFileBtn">📁 JSON ఫైల్ ఎంచుకోండి</button>
+  <input type="file" id="fileInput" accept=".json">
+</div>
 
 <script>
+(function(){
+  "use strict";
 
-/*
-=============================================================
-BHARATAMU MATRIX
-=============================================================
+  // ------------------------------------------------------------------
+  // State
+  // ------------------------------------------------------------------
+  const STORAGE_KEY_DATA   = "mbh_reader_data_v1";
+  const STORAGE_KEY_FONT   = "mbh_reader_font_v1";
+  const STORAGE_KEY_BOOK   = "mbh_reader_bookmarks_v1";
+  const STORAGE_KEY_POS    = "mbh_reader_pos_v1";
 
-Each value is the LAST HTML number for that
-Parva / Asvasa.
+  let rawData = [];        // parsed JSON as produced by the extractor
+  let screens = [];        // flattened list of {fileName, sectionHeader, breadcrumb, number, type, parts, text, bhavam}
+  let currentIndex = 0;
+  let fontScale = 1.0;
+  let bookmarks = {};       // key -> true   (key = fileName + '#' + number + '#' + index)
+  let touchStartX = 0, touchStartY = 0, dragging = false, dragDX = 0;
 
-The starting number is calculated:
+  // ------------------------------------------------------------------
+  // DOM refs
+  // ------------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const track = $('track');
+  const hdrTitle = $('hdrTitle');
+  const hdrSub = $('hdrSub');
+  const progressEl = $('progress');
+  const prevBtn = $('prevBtn');
+  const nextBtn = $('nextBtn');
+  const overlay = $('overlay');
+  const drawer = $('drawer');
+  const fileListEl = $('fileList');
+  const bookmarkListEl = $('bookmarkList');
+  const bookmarkEmpty = $('bookmarkEmpty');
+  const fontLabel = $('fontLabel');
+  const searchOverlay = $('searchOverlay');
+  const searchInput = $('searchInput');
+  const searchResults = $('searchResults');
+  const loaderScreen = $('loaderScreen');
+  const fileInput = $('fileInput');
 
-    start = Asvasa * 100 + 1
-
-Example:
-
-    Adi / Asvasa 3
-
-    start = 301
-    end   = 323
-=============================================================
-*/
-
-const matrix = {
-
-    "Adi": {
-        1: 117,
-        2: 222,
-        3: 323,
-        4: 429,
-        5: 531,
-        6: 636,
-        7: 734,
-        8: 830
-    },
-
-    "sabhA": {
-        1: 140,
-        2: 219
-    },
-
-    "AraNya": {
-        1: 122,
-        2: 218,
-        3: 327,
-        4: 421,
-        5: 530,
-        6: 624,
-        7: 724
-    },
-
-    "virATa": {
-        1: 116,
-        2: 222,
-        3: 313,
-        4: 416,
-        5: 521
-    },
-
-    "udyOga": {
-        1: 118,
-        2: 216,
-        3: 321,
-        4: 423
-    },
-
-    "bhIShma": {
-        1: 117,
-        2: 221,
-        3: 323
-    },
-
-    "drONa": {
-        1: 119,
-        2: 223,
-        3: 319,
-        4: 417,
-        5: 526
-    },
-
-    "karNa": {
-        1: 119,
-        2: 224,
-        3: 323
-    },
-
-    "Salya": {
-        1: 121,
-        2: 226
-    },
-
-    "sauptika": {
-        1: 114,
-        2: 210
-    },
-
-    "strI": {
-        1: 111,
-        2: 211
-    },
-
-    "SAMti": {
-        1: 124,
-        2: 227,
-        3: 335,
-        4: 424,
-        5: 536,
-        6: 632
-    },
-
-    "AnuSAsanika": {
-        1: 123,
-        2: 226,
-        3: 318,
-        4: 435
-    },
-
-    "aSvamEdha": {
-        1: 114,
-        2: 211,
-        3: 316,
-        4: 422
-    },
-
-    "ASramavAsa": {
-        1: 113,
-        2: 214
-    },
-
-    "mausala": {
-        1: 123
-    },
-
-    "mahAprasthAnika": {
-        1: 107
-    },
-
-    "svargArOhaNa": {
-        1: 110
-    }
-};
-
-
-/*
-=============================================================
-ELEMENTS
-=============================================================
-*/
-
-const parvaSelect =
-    document.getElementById("parva");
-
-const asvasaSelect =
-    document.getElementById("asvasa");
-
-const startNumber =
-    document.getElementById("startNumber");
-
-const endNumber =
-    document.getElementById("endNumber");
-
-const fileCount =
-    document.getElementById("fileCount");
-
-const showFilesButton =
-    document.getElementById("showFilesButton");
-
-const generateButton =
-    document.getElementById("generateButton");
-
-const downloadScriptButton =
-    document.getElementById("downloadScriptButton");
-
-const fileList =
-    document.getElementById("fileList");
-
-const urlPreview =
-    document.getElementById("urlPreview");
-
-const statusText =
-    document.getElementById("statusText");
-
-const powershellArea =
-    document.getElementById("powershellArea");
-
-const powershellCode =
-    document.getElementById("powershellCode");
-
-
-let generatedScript = "";
-
-
-/*
-=============================================================
-POPULATE PARVA
-=============================================================
-*/
-
-function populateParvas() {
-
-    parvaSelect.innerHTML = "";
-
-    Object.keys(matrix).forEach(parva => {
-
-        const option =
-            document.createElement("option");
-
-        option.value = parva;
-        option.textContent = parva;
-
-        parvaSelect.appendChild(option);
-    });
-}
-
-
-/*
-=============================================================
-POPULATE ASVASA
-=============================================================
-*/
-
-function populateAsvasas() {
-
-    const parva =
-        parvaSelect.value;
-
-    asvasaSelect.innerHTML = "";
-
-    const entries =
-        matrix[parva];
-
-    Object.keys(entries)
-        .sort((a, b) => Number(a) - Number(b))
-        .forEach(number => {
-
-            const option =
-                document.createElement("option");
-
-            option.value = number;
-
-            option.textContent =
-                "Asvasa " + number;
-
-            asvasaSelect.appendChild(option);
+  // ------------------------------------------------------------------
+  // Data loading
+  // ------------------------------------------------------------------
+  function flattenData(data){
+    const out = [];
+    data.forEach(function(file){
+      (file.sections || []).forEach(function(sec){
+        (sec.padyams || []).forEach(function(p){
+          out.push({
+            fileName: file.fileName,
+            aswasam: (file.breadcrumb && file.breadcrumb[file.breadcrumb.length - 1]) || file.title || file.fileName,
+            topic: sec.header || '',
+            number: p.number,
+            type: p.type,
+            parts: p.parts || [{type:p.type, lines:(p.text||'').split('\n'), text:p.text}],
+            text: p.text || '',
+            bhavam: p.bhavam || p.meaning || p.artham || p.tatparyam || p.vyakhya || null
+          });
         });
-
-    updateSummary();
-}
-
-
-/*
-=============================================================
-GET RANGE
-=============================================================
-*/
-
-function getRange() {
-
-    const parva =
-        parvaSelect.value;
-
-    const asvasa =
-        Number(asvasaSelect.value);
-
-    const start =
-        asvasa * 100 + 1;
-
-    const end =
-        matrix[parva][asvasa];
-
-    return {
-        parva,
-        asvasa,
-        start,
-        end,
-        count: end - start + 1
-    };
-}
-
-
-/*
-=============================================================
-GET URL
-=============================================================
-*/
-
-function getUrl(parva, number) {
-
-    return (
-        "https://www.andhrabharati.com/" +
-        "itihAsamulu/bhAratamu/" +
-        parva + "_" + number + ".html"
-    );
-}
-
-
-/*
-=============================================================
-GET FILENAME
-=============================================================
-*/
-
-function getFilename(parva, number) {
-
-    return parva + "_" + number + ".html";
-}
-
-
-/*
-=============================================================
-UPDATE SUMMARY
-=============================================================
-*/
-
-function updateSummary() {
-
-    const range =
-        getRange();
-
-    startNumber.textContent =
-        range.start;
-
-    endNumber.textContent =
-        range.end;
-
-    fileCount.textContent =
-        range.count;
-
-    urlPreview.textContent =
-        getUrl(range.parva, range.start);
-
-    fileList.style.display =
-        "none";
-
-    powershellArea.style.display =
-        "none";
-
-    downloadScriptButton.style.display =
-        "none";
-
-    statusText.textContent =
-        "Ready";
-
-    generatedScript = "";
-}
-
-
-/*
-=============================================================
-SHOW FILES
-=============================================================
-*/
-
-function showFiles() {
-
-    const range =
-        getRange();
-
-    fileList.innerHTML = "";
-
-    for (
-        let number = range.start;
-        number <= range.end;
-        number++
-    ) {
-
-        const div =
-            document.createElement("div");
-
-        div.className =
-            "file-item";
-
-        div.textContent =
-            getFilename(range.parva, number);
-
-        fileList.appendChild(div);
-    }
-
-    fileList.style.display =
-        "block";
-
-    statusText.textContent =
-        `${range.count} file(s) listed.`;
-}
-
-
-/*
-=============================================================
-ESCAPE POWERSHELL SINGLE-QUOTED STRING
-=============================================================
-
-PowerShell strings are enclosed with single quotes.
-
-A single quote inside a PowerShell single-quoted
-string is represented by two single quotes.
-=============================================================
-*/
-
-function psQuote(value) {
-
-    return "'" +
-        String(value).replace(/'/g, "''") +
-        "'";
-}
-
-
-/*
-=============================================================
-GENERATE POWERSHELL
-=============================================================
-*/
-
-function generatePowerShell() {
-
-    const range =
-        getRange();
-
-    const folderName =
-        range.parva +
-        "_Asvasa_" +
-        range.asvasa;
-
-    const lines = [];
-
-    lines.push(
-        "# ====================================================="
-    );
-
-    lines.push(
-        "# Bharatamu Downloader"
-    );
-
-    lines.push(
-        `# Parva   : ${range.parva}`
-    );
-
-    lines.push(
-        `# Asvasa  : ${range.asvasa}`
-    );
-
-    lines.push(
-        `# Range   : ${range.start} - ${range.end}`
-    );
-
-    lines.push(
-        `# Files   : ${range.count}`
-    );
-
-    lines.push(
-        "# ====================================================="
-    );
-
-    lines.push("");
-
-    lines.push(
-        "$ErrorActionPreference = 'Continue'"
-    );
-
-    lines.push("");
-
-    lines.push(
-        `$folder = ${psQuote(folderName)}`
-    );
-
-    lines.push("");
-
-    lines.push(
-        "New-Item -ItemType Directory -Force -Path $folder | Out-Null"
-    );
-
-    lines.push("");
-
-    lines.push(
-        "Set-Location $folder"
-    );
-
-    lines.push("");
-
-    lines.push(
-        "$success = @()"
-    );
-
-    lines.push(
-        "$failed = @()"
-    );
-
-    lines.push("");
-
-    lines.push(
-        `Write-Host "Parva: ${range.parva}"`
-    );
-
-    lines.push(
-        `Write-Host "Asvasa: ${range.asvasa}"`
-    );
-
-    lines.push(
-        `Write-Host "Range: ${range.start} - ${range.end}"`
-    );
-
-    lines.push(
-        `Write-Host "Total files: ${range.count}"`
-    );
-
-    lines.push("");
-
-    lines.push(
-        `for ($i = ${range.start}; $i -le ${range.end}; $i++) {`
-    );
-
-    lines.push("");
-
-    lines.push(
-        `    $url = "https://www.andhrabharati.com/itihAsamulu/bhAratamu/${range.parva}_$i.html"`
-    );
-
-    lines.push(
-        `    $out = "${range.parva}_$i.html"`
-    );
-
-    lines.push("");
-
-    lines.push(
-        '    Write-Host "Downloading $out" -ForegroundColor Cyan'
-    );
-
-    lines.push("");
-
-    lines.push(
-        "    try {"
-    );
-
-    lines.push("");
-
-    lines.push(
-        '        Invoke-WebRequest `'
-    );
-
-    lines.push(
-        '            -Uri $url `'
-    );
-
-    lines.push(
-        '            -OutFile $out `'
-    );
-
-    lines.push(
-        '            -UserAgent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" `'
-    );
-
-    lines.push(
-        '            -UseBasicParsing'
-    );
-
-    lines.push("");
-
-    lines.push(
-        '        Write-Host "Downloaded $out" -ForegroundColor Green'
-    );
-
-    lines.push(
-        "        $success += $out"
-    );
-
-    lines.push("");
-
-    lines.push(
-        "    }"
-    );
-
-    lines.push(
-        "    catch {"
-    );
-
-    lines.push("");
-
-    lines.push(
-        '        Write-Host "FAILED $out" -ForegroundColor Red'
-    );
-
-    lines.push(
-        '        Write-Host $_ -ForegroundColor Red'
-    );
-
-    lines.push(
-        "        $failed += $out"
-    );
-
-    lines.push("");
-
-    lines.push(
-        "    }"
-    );
-
-    lines.push("");
-
-    lines.push(
-        "    Start-Sleep -Seconds 1"
-    );
-
-    lines.push("}");
-
-    lines.push("");
-
-    lines.push(
-        'Write-Host ""'
-    );
-
-    lines.push(
-        'Write-Host "====================================================="'
-    );
-
-    lines.push(
-        'Write-Host "DOWNLOAD SUMMARY"'
-    );
-
-    lines.push(
-        'Write-Host "====================================================="'
-    );
-
-    lines.push("");
-
-    lines.push(
-        'Write-Host ("Successful: " + $success.Count) -ForegroundColor Green'
-    );
-
-    lines.push(
-        'Write-Host ("Failed:     " + $failed.Count) -ForegroundColor Red'
-    );
-
-    lines.push("");
-
-    lines.push(
-        "if ($failed.Count -gt 0) {"
-    );
-
-    lines.push(
-        '    Write-Host ""'
-    );
-
-    lines.push(
-        '    Write-Host "Failed files:" -ForegroundColor Red'
-    );
-
-    lines.push("");
-
-    lines.push(
-        "    $failed | ForEach-Object {"
-    );
-
-    lines.push(
-        '        Write-Host ("  " + $_) -ForegroundColor Red'
-    );
-
-    lines.push(
-        "    }"
-    );
-
-    lines.push("}");
-
-    lines.push("");
-
-    lines.push(
-        'Write-Host ""'
-    );
-
-    lines.push(
-        'Write-Host "Output folder:" -ForegroundColor Yellow'
-    );
-
-    lines.push(
-        'Write-Host (Get-Location).Path -ForegroundColor Yellow'
-    );
-
-    lines.push("");
-
-    lines.push(
-        'Write-Host ""'
-    );
-
-    lines.push(
-        'Write-Host "Finished." -ForegroundColor Cyan'
-    );
-
-    generatedScript =
-        lines.join("\n");
-
-    powershellCode.value =
-        generatedScript;
-
-    powershellArea.style.display =
-        "block";
-
-    downloadScriptButton.style.display =
-        "inline-block";
-
-    statusText.textContent =
-        "PowerShell script generated.";
-
-    powershellArea.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
+      });
     });
-}
+    return out;
+  }
 
-
-/*
-=============================================================
-DOWNLOAD .PS1
-=============================================================
-*/
-
-function downloadPowerShell() {
-
-    if (!generatedScript) {
-        return;
+  function loadDataInto(data){
+    rawData = data;
+    screens = flattenData(data);
+    if(screens.length === 0){
+      alert('ఈ JSON ఫైల్‌లో పద్యాలు కనబడలేదు (No padyams found in this file).');
+      return false;
     }
+    loaderScreen.classList.add('hidden');
+    buildFileList();
+    restorePosition();
+    renderTrack();
+    goTo(currentIndex, false);
+    return true;
+  }
 
-    const range =
-        getRange();
+  function tryRestoreFromCache(){
+    try{
+      const cached = localStorage.getItem(STORAGE_KEY_DATA);
+      if(cached){
+        const data = JSON.parse(cached);
+        return loadDataInto(data);
+      }
+    }catch(e){ /* ignore corrupt cache */ }
+    return false;
+  }
 
-    const filename =
-        "download_" +
-        range.parva +
-        "_Asvasa_" +
-        range.asvasa +
-        ".ps1";
+  function cacheData(data){
+    try{ localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(data)); }
+    catch(e){ /* storage full or unavailable — reader still works this session */ }
+  }
 
-    const blob =
-        new Blob(
-            [generatedScript],
-            {
-                type:
-                    "text/plain;charset=utf-8"
-            }
-        );
+  $('pickFileBtn').addEventListener('click', function(){ fileInput.click(); });
+  $('loadNewBtn').addEventListener('click', function(){ closeDrawer(); fileInput.click(); });
+  fileInput.addEventListener('change', function(){
+    const f = fileInput.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = function(){
+      try{
+        const data = JSON.parse(reader.result);
+        cacheData(data);
+        currentIndex = 0;
+        loadDataInto(data);
+      }catch(e){
+        alert('JSON చదవడంలో లోపం: ' + e.message);
+      }
+    };
+    reader.readAsText(f);
+  });
 
-    const url =
-        URL.createObjectURL(blob);
+  // ------------------------------------------------------------------
+  // Rendering
+  // ------------------------------------------------------------------
+  function escapeHtml(s){
+    return String(s || '').replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
 
-    const link =
-        document.createElement("a");
+  function screenKey(i){
+    const s = screens[i];
+    return s.fileName + '#' + s.number + '#' + i;
+  }
 
-    link.href =
-        url;
+  function renderScreen(s, idx){
+    const partsHtml = s.parts.map(function(pt){
+      return '<div class="verse-part">' +
+        (s.parts.length > 1 ? '<div class="ptype">' + escapeHtml(pt.type) + '</div>' : '') +
+        '<div class="verse-text">' + escapeHtml(pt.lines ? pt.lines.join('\n') : pt.text) + '</div>' +
+        '</div>';
+    }).join('');
 
-    link.download =
-        filename;
+    const bookmarked = !!bookmarks[screenKey(idx)];
 
-    document.body.appendChild(link);
+    const meaningHtml = s.bhavam
+      ? '<div class="meaning-text">' + escapeHtml(s.bhavam) + '</div>'
+      : '<div class="meaning-empty">భావం అందుబాటులో లేదు.</div>';
 
-    link.click();
+    const div = document.createElement('div');
+    div.className = 'screen';
+    div.innerHTML =
+      '<div class="verse-pane">' +
+        '<div class="verse-meta">' +
+          (s.number ? '<span class="verse-badge">#' + escapeHtml(s.number) + '</span>' : '') +
+          '<span class="verse-type">' + escapeHtml(s.type || '') + '</span>' +
+          '<button class="verse-star ' + (bookmarked ? 'on' : '') + '" data-idx="' + idx + '">★</button>' +
+        '</div>' +
+        partsHtml +
+      '</div>' +
+      '<div class="resize-handle"></div>' +
+      '<div class="meaning-pane">' +
+        '<h5>భావం</h5>' +
+        meaningHtml +
+      '</div>';
+    return div;
+  }
 
-    link.remove();
+  function renderTrack(){
+    track.innerHTML = '';
+    // Virtualize: render only current +/- 1 for performance on large datasets.
+    screens.forEach(function(s, idx){
+      const placeholder = document.createElement('div');
+      placeholder.className = 'screen';
+      placeholder.dataset.idx = idx;
+      track.appendChild(placeholder);
+    });
+    applyFontScale();
+    renderVisibleRange();
+  }
 
-    URL.revokeObjectURL(url);
+  let renderedIdx = new Set();
+  function renderVisibleRange(){
+    const lo = Math.max(0, currentIndex - 1);
+    const hi = Math.min(screens.length - 1, currentIndex + 1);
+    for(let i = lo; i <= hi; i++){
+      if(renderedIdx.has(i)) continue;
+      const real = renderScreen(screens[i], i);
+      real.dataset.idx = i;
+      track.replaceChild(real, track.children[i]);
+      renderedIdx.add(i);
+    }
+  }
 
-    statusText.textContent =
-        `Saved ${filename}`;
-}
+  function applyFontScale(){
+    document.documentElement.style.setProperty('--verse-size', (1.15 * fontScale) + 'rem');
+    fontLabel.textContent = Math.round(fontScale * 100) + '%';
+  }
 
+  function updateHeader(){
+    const s = screens[currentIndex];
+    if(!s) return;
+    hdrSub.textContent = s.aswasam + (s.topic ? ' · ' + s.topic : '');
+  }
 
-/*
-=============================================================
-EVENTS
-=============================================================
-*/
+  function updateProgress(){
+    progressEl.innerHTML = '<b>' + (currentIndex + 1) + '</b> / ' + screens.length;
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === screens.length - 1;
+  }
 
-parvaSelect.addEventListener(
-    "change",
-    populateAsvasas
-);
+  function savePosition(){
+    try{ localStorage.setItem(STORAGE_KEY_POS, String(currentIndex)); }catch(e){}
+  }
+  function restorePosition(){
+    try{
+      const saved = localStorage.getItem(STORAGE_KEY_POS);
+      if(saved !== null){
+        const n = parseInt(saved, 10);
+        if(!isNaN(n) && n >= 0 && n < screens.length) currentIndex = n;
+      }
+    }catch(e){}
+  }
 
-asvasaSelect.addEventListener(
-    "change",
-    updateSummary
-);
+  function goTo(idx, animate){
+    if(idx < 0 || idx >= screens.length) return;
+    currentIndex = idx;
+    renderVisibleRange();
+    const x = -idx * 100;
+    track.style.transition = animate === false ? 'none' : 'transform 0.28s ease';
+    track.style.transform = 'translateX(' + x + '%)';
+    updateHeader();
+    updateProgress();
+    savePosition();
+    highlightFileListCurrent();
+  }
 
-showFilesButton.addEventListener(
-    "click",
-    showFiles
-);
+  // ------------------------------------------------------------------
+  // Nav buttons + keyboard
+  // ------------------------------------------------------------------
+  prevBtn.addEventListener('click', function(){ goTo(currentIndex - 1); });
+  nextBtn.addEventListener('click', function(){ goTo(currentIndex + 1); });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowLeft') goTo(currentIndex - 1);
+    if(e.key === 'ArrowRight') goTo(currentIndex + 1);
+    if(e.key === 'Escape'){ closeDrawer(); closeSearch(); }
+  });
 
-generateButton.addEventListener(
-    "click",
-    generatePowerShell
-);
+  // ------------------------------------------------------------------
+  // Swipe handling (horizontal-dominant only, so vertical scroll in
+  // verse/meaning panes keeps working)
+  // ------------------------------------------------------------------
+  const stage = $('stage');
+  stage.addEventListener('touchstart', function(e){
+    const t = e.touches[0];
+    touchStartX = t.clientX; touchStartY = t.clientY;
+    dragging = true; dragDX = 0;
+  }, {passive:true});
 
-downloadScriptButton.addEventListener(
-    "click",
-    downloadPowerShell
-);
+  stage.addEventListener('touchmove', function(e){
+    if(!dragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    if(Math.abs(dx) > Math.abs(dy)){
+      dragDX = dx;
+      const base = -currentIndex * 100;
+      const pct = (dx / stage.clientWidth) * 100;
+      track.style.transition = 'none';
+      track.style.transform = 'translateX(' + (base + pct) + '%)';
+    }
+  }, {passive:true});
 
+  stage.addEventListener('touchend', function(){
+    if(!dragging) return;
+    dragging = false;
+    const threshold = stage.clientWidth * 0.18;
+    if(dragDX > threshold && currentIndex > 0){
+      goTo(currentIndex - 1);
+    } else if(dragDX < -threshold && currentIndex < screens.length - 1){
+      goTo(currentIndex + 1);
+    } else {
+      goTo(currentIndex, true);
+    }
+    dragDX = 0;
+  });
 
-/*
-=============================================================
-INITIALIZE
-=============================================================
-*/
+  // ------------------------------------------------------------------
+  // Bookmark toggle (event delegation, since screens render lazily)
+  // ------------------------------------------------------------------
+  track.addEventListener('click', function(e){
+    const btn = e.target.closest('.verse-star');
+    if(!btn) return;
+    const idx = Number(btn.dataset.idx);
+    const key = screenKey(idx);
+    if(bookmarks[key]) delete bookmarks[key];
+    else bookmarks[key] = { idx: idx, label: (screens[idx].aswasam + ' · #' + (screens[idx].number || '—')) };
+    saveBookmarks();
+    btn.classList.toggle('on');
+    renderBookmarkList();
+  });
 
-populateParvas();
+  function saveBookmarks(){
+    try{ localStorage.setItem(STORAGE_KEY_BOOK, JSON.stringify(bookmarks)); }catch(e){}
+  }
+  function loadBookmarks(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY_BOOK);
+      bookmarks = raw ? JSON.parse(raw) : {};
+    }catch(e){ bookmarks = {}; }
+  }
+  function renderBookmarkList(){
+    const keys = Object.keys(bookmarks);
+    bookmarkListEl.innerHTML = '';
+    bookmarkEmpty.classList.toggle('hidden', keys.length > 0);
+    keys.forEach(function(key){
+      const bm = bookmarks[key];
+      const li = document.createElement('li');
+      li.innerHTML = '<span>' + escapeHtml(bm.label) + '</span><span class="bm-del" data-key="' + key + '">✕</span>';
+      li.addEventListener('click', function(e){
+        if(e.target.classList.contains('bm-del')){
+          delete bookmarks[key];
+          saveBookmarks();
+          renderBookmarkList();
+          return;
+        }
+        closeDrawer();
+        goTo(bm.idx);
+      });
+      bookmarkListEl.appendChild(li);
+    });
+  }
 
-populateAsvasas();
+  // ------------------------------------------------------------------
+  // Drawer (hamburger menu)
+  // ------------------------------------------------------------------
+  function openDrawer(){ overlay.classList.add('show'); drawer.classList.add('show'); }
+  function closeDrawer(){ overlay.classList.remove('show'); drawer.classList.remove('show'); }
+  $('menuBtn').addEventListener('click', openDrawer);
+  $('closeDrawerBtn').addEventListener('click', closeDrawer);
+  overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); });
 
+  function buildFileList(){
+    const seen = [];
+    const firstIdxByFile = {};
+    screens.forEach(function(s, idx){
+      if(firstIdxByFile[s.fileName] === undefined){
+        firstIdxByFile[s.fileName] = idx;
+        seen.push(s.fileName);
+      }
+    });
+    fileListEl.innerHTML = '';
+    seen.forEach(function(fn){
+      const li = document.createElement('li');
+      li.dataset.file = fn;
+      li.textContent = screens[firstIdxByFile[fn]].aswasam || fn;
+      li.addEventListener('click', function(){
+        closeDrawer();
+        goTo(firstIdxByFile[fn]);
+      });
+      fileListEl.appendChild(li);
+    });
+  }
+  function highlightFileListCurrent(){
+    const currentFile = screens[currentIndex] && screens[currentIndex].fileName;
+    Array.from(fileListEl.children).forEach(function(li){
+      li.classList.toggle('current', li.dataset.file === currentFile);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Font size controls
+  // ------------------------------------------------------------------
+  $('fontPlus').addEventListener('click', function(){
+    fontScale = Math.min(2, Math.round((fontScale + 0.1) * 10) / 10);
+    applyFontScale(); saveFontScale();
+  });
+  $('fontMinus').addEventListener('click', function(){
+    fontScale = Math.max(0.7, Math.round((fontScale - 0.1) * 10) / 10);
+    applyFontScale(); saveFontScale();
+  });
+  function saveFontScale(){
+    try{ localStorage.setItem(STORAGE_KEY_FONT, String(fontScale)); }catch(e){}
+  }
+  function loadFontScale(){
+    try{
+      const v = localStorage.getItem(STORAGE_KEY_FONT);
+      if(v) fontScale = parseFloat(v) || 1.0;
+    }catch(e){}
+  }
+
+  // ------------------------------------------------------------------
+  // Search
+  // ------------------------------------------------------------------
+  function openSearch(){
+    searchOverlay.classList.add('show');
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+    setTimeout(function(){ searchInput.focus(); }, 260);
+  }
+  function closeSearch(){ searchOverlay.classList.remove('show'); }
+  $('searchBtn').addEventListener('click', openSearch);
+  $('closeSearchBtn').addEventListener('click', closeSearch);
+
+  let searchDebounce = null;
+  searchInput.addEventListener('input', function(){
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(runSearch, 150);
+  });
+
+  function runSearch(){
+    const q = searchInput.value.trim();
+    if(q.length < 1){ searchResults.innerHTML = ''; return; }
+    const ql = q.toLowerCase();
+    const matches = [];
+    for(let i = 0; i < screens.length && matches.length < 60; i++){
+      const s = screens[i];
+      const hay = (s.text + ' ' + (s.number||'') + ' ' + s.topic + ' ' + s.aswasam).toLowerCase();
+      if(hay.indexOf(ql) !== -1){
+        matches.push(i);
+      }
+    }
+    if(matches.length === 0){
+      searchResults.innerHTML = '<div class="search-empty">ఫలితాలు లేవు</div>';
+      return;
+    }
+    searchResults.innerHTML = '';
+    matches.forEach(function(idx){
+      const s = screens[idx];
+      const snippet = highlightMatch(s.text.slice(0, 140), q);
+      const div = document.createElement('div');
+      div.className = 'search-item';
+      div.innerHTML =
+        '<div class="si-loc">' + escapeHtml(s.aswasam) + (s.number ? ' · #' + escapeHtml(s.number) : '') + '</div>' +
+        '<div class="si-text">' + snippet + '</div>';
+      div.addEventListener('click', function(){
+        closeSearch();
+        goTo(idx);
+      });
+      searchResults.appendChild(div);
+    });
+  }
+  function highlightMatch(text, q){
+    const esc = escapeHtml(text);
+    if(!q) return esc;
+    const idx = esc.toLowerCase().indexOf(q.toLowerCase());
+    if(idx === -1) return esc;
+    return esc.slice(0, idx) + '<mark>' + esc.slice(idx, idx + q.length) + '</mark>' + esc.slice(idx + q.length);
+  }
+
+  // ------------------------------------------------------------------
+  // Resize handle: drag to adjust verse/meaning pane split
+  // ------------------------------------------------------------------
+  // (Kept simple/global rather than per-screen, applies via CSS var.)
+  let resizingActive = false, resizeStartY = 0, startVerseFlex = 55;
+  document.addEventListener('mousedown', handleResizeStart);
+  document.addEventListener('touchstart', handleResizeStart, {passive:true});
+  function handleResizeStart(e){
+    if(!e.target.classList || !e.target.classList.contains('resize-handle')) return;
+    resizingActive = true;
+    const point = e.touches ? e.touches[0] : e;
+    resizeStartY = point.clientY;
+  }
+  document.addEventListener('mousemove', handleResizeMove);
+  document.addEventListener('touchmove', handleResizeMove, {passive:true});
+  function handleResizeMove(e){
+    if(!resizingActive) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dy = point.clientY - resizeStartY;
+    const screenEl = track.children[currentIndex];
+    if(!screenEl) return;
+    const versePane = screenEl.querySelector('.verse-pane');
+    const meaningPane = screenEl.querySelector('.meaning-pane');
+    if(!versePane || !meaningPane) return;
+    const totalH = screenEl.clientHeight - 14;
+    let verseH = versePane.clientHeight + dy;
+    verseH = Math.max(totalH * 0.2, Math.min(totalH * 0.8, verseH));
+    versePane.style.flex = '0 0 ' + verseH + 'px';
+    meaningPane.style.flex = '1 1 auto';
+    resizeStartY = point.clientY;
+  }
+  document.addEventListener('mouseup', function(){ resizingActive = false; });
+  document.addEventListener('touchend', function(){ resizingActive = false; });
+
+  // ------------------------------------------------------------------
+  // Boot
+  // ------------------------------------------------------------------
+  loadFontScale();
+  loadBookmarks();
+  renderBookmarkList();
+  applyFontScale();
+  tryRestoreFromCache();
+
+  window.addEventListener('resize', function(){ goTo(currentIndex, false); });
+})();
 </script>
 
 </body>
