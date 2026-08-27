@@ -476,10 +476,14 @@
         const raw = reader.result;
         let rows;
         if(/\.js$/i.test(f.name)){
-          // Expect: "... const padyamData = [ ... ];" — pull out just the array literal.
-          const match = raw.match(/=\s*(\[[\s\S]*\])\s*;?\s*$/);
-          if(!match) throw new Error('padyamData array కనబడలేదు');
-          rows = JSON.parse(match[1]);
+          // Run the file's own source so "const padyamData = [...]" (plus any
+          // trailing module.exports guard, comments, etc.) executes normally,
+          // then hand back the resulting array — far more robust than
+          // regex-slicing the array literal out of arbitrarily large text.
+          const runner = new Function('module', 'exports',
+            raw + '\n;return (typeof padyamData !== "undefined") ? padyamData : null;');
+          rows = runner({ exports: {} }, {});
+          if(!rows) throw new Error('padyamData array కనబడలేదు');
         } else {
           rows = JSON.parse(raw);
         }
