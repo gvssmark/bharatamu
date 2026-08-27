@@ -303,7 +303,7 @@
       <div class="empty-note" id="bookmarkEmpty">బుక్‌మార్కులు లేవు</div>
     </div>
     <div class="drawer-section">
-      <button class="drawer-btn" id="loadNewBtn">📁 వేరే ఫైల్ లోడ్ చేయండి</button>
+      <button class="drawer-btn" id="loadNewBtn">📁 వేరే JSON ఫైల్ లోడ్ చేయండి</button>
     </div>
   </div>
 </div>
@@ -320,13 +320,10 @@
   <h1>ఆంధ్రమహాభారతము</h1>
   <p>మీరు padyam-extractor tool తో తయారుచేసిన JSON ఫైల్‌ను ఎంచుకోండి. (Load the padyams.json produced by the extractor tool.)</p>
   <button class="load-btn" id="pickFileBtn">📁 JSON ఫైల్ ఎంచుకోండి</button>
-  <input type="file" id="fileInput" accept=".js,.json">
+  <input type="file" id="fileInput" accept=".json">
 </div>
 
-<script src="padyams.js"></script>
 <script>
-  // If padyams.js is missing (e.g. not yet uploaded), window.padyamData will
-  // simply be undefined and the app falls back to cache / the file picker below.
 (function(){
   "use strict";
 
@@ -339,10 +336,10 @@
   const STORAGE_KEY_POS    = "mbh_reader_pos_v1";
 
   let rawData = [];        // parsed JSON as produced by the extractor
-  let screens = [];        // flattened list of {parva, aswasam, topic, number, type, parts, text, bhavam}
+  let screens = [];        // flattened list of {fileName, sectionHeader, breadcrumb, number, type, parts, text, bhavam}
   let currentIndex = 0;
   let fontScale = 1.0;
-  let bookmarks = {};       // key -> true   (key = parva#aswasam#number#index)
+  let bookmarks = {};       // key -> true   (key = fileName + '#' + number + '#' + index)
   let touchStartX = 0, touchStartY = 0, dragging = false, dragDX = 0;
 
   // ------------------------------------------------------------------
@@ -370,64 +367,36 @@
   // ------------------------------------------------------------------
   // Data loading
   // ------------------------------------------------------------------
-  function normalizeWs(s){
-    return String(s || '').replace(/\s+/g, ' ').trim();
-  }
-
-  // Removes bracketed/parenthesized content (and any digits inside it),
-  // used to clean topic headers like "శకుంతలోపాఖ్యానము (1-40)" -> "శకుంతలోపాఖ్యానము".
-  function cleanTopicLabel(s){
-    return normalizeWs(String(s || '').replace(/[\(\[（【][^\)\]）】]*[\)\]）】]/g, ''));
-  }
-
-  // Converts the flat row format [parva, aswasam, header, number, type, text]
-  // into screen objects. When a "సీ." (Seesam) row has no number, it is always
-  // immediately followed by its tail verse (ఆ. or తే.) which carries the real
-  // number — the two rows are merged into a single padyam with two display parts.
-  function flattenRows(rows){
+  function flattenData(data){
     const out = [];
-    for(let i = 0; i < rows.length; i++){
-      const r = rows[i];
-      const parva = normalizeWs(r[0]);
-      const aswasam = normalizeWs(r[1]);
-      const topic = r[2] || '';
-      const number = r[3] || '';
-      const type = r[4] || '';
-      const text = r[5] || '';
-
-      if(type === 'సీ.' && !number && rows[i + 1]){
-        const next = rows[i + 1];
-        out.push({
-          parva: parva, aswasam: aswasam, topic: topic,
-          number: next[3] || '',
-          type: type,
-          parts: [
-            { type: type, lines: text.split('\n'), text: text },
-            { type: next[4] || '', lines: (next[5] || '').split('\n'), text: next[5] || '' }
-          ],
-          text: text + '\n' + (next[5] || ''),
-          bhavam: null
+    data.forEach(function(file){
+      const bc = file.breadcrumb || [];
+      const parvaRaw = bc.length >= 2 ? bc[bc.length - 2] : (bc[0] || 'మహాభారతము');
+      const parvaName = String(parvaRaw).replace(/\s+/g, ' ').trim();
+      (file.sections || []).forEach(function(sec){
+        (sec.padyams || []).forEach(function(p){
+          out.push({
+            fileName: file.fileName,
+            parva: parvaName,
+            aswasam: (file.breadcrumb && file.breadcrumb[file.breadcrumb.length - 1]) || file.title || file.fileName,
+            topic: sec.header || '',
+            number: p.number,
+            type: p.type,
+            parts: p.parts || [{type:p.type, lines:(p.text||'').split('\n'), text:p.text}],
+            text: p.text || '',
+            bhavam: p.bhavam || p.meaning || p.artham || p.tatparyam || p.vyakhya || null
+          });
         });
-        i++; // the tail row was consumed as part of this padyam
-        continue;
-      }
-
-      out.push({
-        parva: parva, aswasam: aswasam, topic: topic,
-        number: number, type: type,
-        parts: [{ type: type, lines: text.split('\n'), text: text }],
-        text: text,
-        bhavam: null
       });
-    }
+    });
     return out;
   }
 
-  function loadDataInto(rows){
-    rawData = rows;
-    screens = flattenRows(rows);
+  function loadDataInto(data){
+    rawData = data;
+    screens = flattenData(data);
     if(screens.length === 0){
-      alert('ఈ ఫైల్‌లో పద్యాలు కనబడలేదు (No padyams found in this file).');
+      alert('ఈ JSON ఫైల్‌లో పద్యాలు కనబడలేదు (No padyams found in this file).');
       return false;
     }
     loaderScreen.classList.add('hidden');
@@ -439,14 +408,16 @@
   }
 
   function autoLoadFromServer(){
-    // padyams.js (loaded via <script src="padyams.js">) defines a global
-    // `padyamData` array — this works both on GitHub Pages and when the file
-    // is opened locally (unlike fetch(), which fails on file:// due to CORS).
-    if(typeof window.padyamData !== 'undefined' && Array.isArray(window.padyamData) && window.padyamData.length){
-      cacheData(window.padyamData);
-      return Promise.resolve(loadDataInto(window.padyamData));
-    }
-    return Promise.resolve(false);
+    return fetch('padyams.json', { cache: 'no-store' })
+      .then(function(res){
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        cacheData(data);
+        return loadDataInto(data);
+      })
+      .catch(function(){ return false; });
   }
 
   function tryRestoreFromCache(){
@@ -473,21 +444,12 @@
     const reader = new FileReader();
     reader.onload = function(){
       try{
-        const raw = reader.result;
-        let rows;
-        if(/\.js$/i.test(f.name)){
-          // Expect: "... const padyamData = [ ... ];" — pull out just the array literal.
-          const match = raw.match(/=\s*(\[[\s\S]*\])\s*;?\s*$/);
-          if(!match) throw new Error('padyamData array కనబడలేదు');
-          rows = JSON.parse(match[1]);
-        } else {
-          rows = JSON.parse(raw);
-        }
-        cacheData(rows);
+        const data = JSON.parse(reader.result);
+        cacheData(data);
         currentIndex = 0;
-        loadDataInto(rows);
+        loadDataInto(data);
       }catch(e){
-        alert('ఫైల్ చదవడంలో లోపం: ' + e.message);
+        alert('JSON చదవడంలో లోపం: ' + e.message);
       }
     };
     reader.readAsText(f);
@@ -504,7 +466,7 @@
 
   function screenKey(i){
     const s = screens[i];
-    return s.parva + '#' + s.aswasam + '#' + s.number + '#' + i;
+    return s.fileName + '#' + s.number + '#' + i;
   }
 
   function renderScreen(s, idx){
@@ -715,8 +677,7 @@
   overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); });
 
   function buildNavTree(){
-    // Group screens into parva -> aswasam(by NAME, spans multiple source pages/files) -> topic,
-    // preserving first-seen order.
+    // Group screens into parva -> aswasam(file) -> topic, preserving first-seen order.
     const parvaOrder = [];
     const parvaMap = new Map();
     screens.forEach(function(s, idx){
@@ -728,16 +689,15 @@
       }
       pv.count++;
 
-      const aswKey = s.aswasam || 'ఆశ్వాసము';
-      let asw = pv.aswasams.get(aswKey);
+      let asw = pv.aswasams.get(s.fileName);
       if(!asw){
-        asw = { label: aswKey, count:0, firstIdx: idx, topicOrder:[], topics:new Map() };
-        pv.aswasams.set(aswKey, asw);
-        pv.aswasamOrder.push(aswKey);
+        asw = { label: s.aswasam || s.fileName, count:0, firstIdx: idx, topicOrder:[], topics:new Map() };
+        pv.aswasams.set(s.fileName, asw);
+        pv.aswasamOrder.push(s.fileName);
       }
       asw.count++;
 
-      const topicKey = cleanTopicLabel(s.topic) || '—';
+      const topicKey = s.topic || '—';
       let tp = asw.topics.get(topicKey);
       if(!tp){
         tp = { label: topicKey, count:0, firstIdx: idx };
@@ -760,11 +720,11 @@
         '<span class="nav-count">(' + pv.count + ')</span>';
       parvaDetails.appendChild(parvaSummary);
 
-      pv.aswasamOrder.forEach(function(aswKey){
-        const asw = pv.aswasams.get(aswKey);
+      pv.aswasamOrder.forEach(function(fileName){
+        const asw = pv.aswasams.get(fileName);
         const aswDetails = document.createElement('details');
         aswDetails.className = 'nav-aswasam';
-        aswDetails.dataset.aswasam = aswKey;
+        aswDetails.dataset.file = fileName;
 
         const aswSummary = document.createElement('summary');
         aswSummary.innerHTML =
@@ -774,13 +734,12 @@
 
         const topicList = document.createElement('ul');
         topicList.className = 'nav-topics';
-        asw.topicOrder.forEach(function(topicKey, i){
+        asw.topicOrder.forEach(function(topicKey){
           const tp = asw.topics.get(topicKey);
           const li = document.createElement('li');
           li.dataset.idx = tp.firstIdx;
-          li.dataset.topicKey = topicKey;
           li.innerHTML =
-            '<span class="nav-label">' + (i + 1) + '. ' + escapeHtml(tp.label) + '</span>' +
+            '<span class="nav-label">' + escapeHtml(tp.label) + '</span>' +
             '<span class="nav-count">(' + tp.count + ')</span>';
           li.addEventListener('click', function(){
             closeDrawer();
@@ -801,13 +760,13 @@
   function highlightNavTreeCurrent(){
     const s = screens[currentIndex];
     if(!s || !navTreeEl.children.length) return;
-    const currentAswasam = s.aswasam || 'ఆశ్వాసము';
-    const currentTopicKey = cleanTopicLabel(s.topic) || '—';
+    const currentFile = s.fileName;
     Array.from(navTreeEl.querySelectorAll('.nav-aswasam')).forEach(function(aswEl){
-      const isCurrentAswasam = aswEl.dataset.aswasam === currentAswasam;
-      if(isCurrentAswasam) aswEl.open = true;
+      const isCurrentFile = aswEl.dataset.file === currentFile;
+      if(isCurrentFile) aswEl.open = true;
       Array.from(aswEl.querySelectorAll('.nav-topics > li')).forEach(function(li){
-        li.classList.toggle('current', isCurrentAswasam && li.dataset.topicKey === currentTopicKey);
+        const idx = Number(li.dataset.idx);
+        li.classList.toggle('current', isCurrentFile && screens[idx] && screens[idx].topic === s.topic);
       });
     });
   }
