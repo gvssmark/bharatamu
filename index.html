@@ -262,7 +262,6 @@
     background: var(--rust); color:#fff; border:none; padding: 13px 26px;
     border-radius: 8px; font-size:1rem; cursor:pointer;
   }
-  #fileInput{ display:none; }
   .hidden{ display:none !important; }
 </style>
 </head>
@@ -315,9 +314,6 @@
       <ul class="bookmark-list" id="bookmarkList"></ul>
       <div class="empty-note" id="bookmarkEmpty">బుక్‌మార్కులు లేవు</div>
     </div>
-    <div class="drawer-section">
-      <button class="drawer-btn" id="loadNewBtn">📁 వేరే ఫైల్ లోడ్ చేయండి</button>
-    </div>
   </div>
 </div>
 
@@ -331,15 +327,14 @@
 
 <div id="loaderScreen">
   <h1>ఆంధ్రమహాభారతము</h1>
-  <p>మీరు padyam-extractor tool తో తయారుచేసిన JSON ఫైల్‌ను ఎంచుకోండి. (Load the padyams.json produced by the extractor tool.)</p>
-  <button class="load-btn" id="pickFileBtn">📁 JSON ఫైల్ ఎంచుకోండి</button>
-  <input type="file" id="fileInput" accept=".js,.json">
+  <p id="loaderStatus">లోడ్ అవుతోంది…</p>
+  <button class="load-btn hidden" id="retryBtn">🔄 మళ్ళీ ప్రయత్నించండి</button>
 </div>
 
 <script src="padyams.js"></script>
 <script>
-  // If padyams.js is missing (e.g. not yet uploaded), window.padyamData will
-  // simply be undefined and the app falls back to cache / the file picker below.
+  // If padyams.js is missing (e.g. not yet uploaded), padyamData will
+  // simply be undefined and the app falls back to its local cache, if any.
 (function(){
   "use strict";
 
@@ -378,7 +373,8 @@
   const searchInput = $('searchInput');
   const searchResults = $('searchResults');
   const loaderScreen = $('loaderScreen');
-  const fileInput = $('fileInput');
+  const loaderStatus = $('loaderStatus');
+  const retryBtn = $('retryBtn');
 
   // ------------------------------------------------------------------
   // Data loading
@@ -455,9 +451,13 @@
     // padyams.js (loaded via <script src="padyams.js">) defines a global
     // `padyamData` array — this works both on GitHub Pages and when the file
     // is opened locally (unlike fetch(), which fails on file:// due to CORS).
-    if(typeof window.padyamData !== 'undefined' && Array.isArray(window.padyamData) && window.padyamData.length){
-      cacheData(window.padyamData);
-      return Promise.resolve(loadDataInto(window.padyamData));
+    // Note: padyams.js declares "const padyamData = [...]" — a top-level
+    // const/let does NOT become a property of window, so we must reference
+    // the bare identifier here rather than window.padyamData. `typeof` is
+    // safe to use even if padyams.js failed to load (no ReferenceError).
+    if(typeof padyamData !== 'undefined' && Array.isArray(padyamData) && padyamData.length){
+      cacheData(padyamData);
+      return Promise.resolve(loadDataInto(padyamData));
     }
     return Promise.resolve(false);
   }
@@ -478,37 +478,7 @@
     catch(e){ /* storage full or unavailable — reader still works this session */ }
   }
 
-  $('pickFileBtn').addEventListener('click', function(){ fileInput.click(); });
-  $('loadNewBtn').addEventListener('click', function(){ closeDrawer(); fileInput.click(); });
-  fileInput.addEventListener('change', function(){
-    const f = fileInput.files[0];
-    if(!f) return;
-    const reader = new FileReader();
-    reader.onload = function(){
-      try{
-        const raw = reader.result;
-        let rows;
-        if(/\.js$/i.test(f.name)){
-          // Run the file's own source so "const padyamData = [...]" (plus any
-          // trailing module.exports guard, comments, etc.) executes normally,
-          // then hand back the resulting array — far more robust than
-          // regex-slicing the array literal out of arbitrarily large text.
-          const runner = new Function('module', 'exports',
-            raw + '\n;return (typeof padyamData !== "undefined") ? padyamData : null;');
-          rows = runner({ exports: {} }, {});
-          if(!rows) throw new Error('padyamData array కనబడలేదు');
-        } else {
-          rows = JSON.parse(raw);
-        }
-        cacheData(rows);
-        currentIndex = 0;
-        loadDataInto(rows);
-      }catch(e){
-        alert('ఫైల్ చదవడంలో లోపం: ' + e.message);
-      }
-    };
-    reader.readAsText(f);
-  });
+  retryBtn.addEventListener('click', function(){ window.location.reload(); });
 
   // ------------------------------------------------------------------
   // Rendering
@@ -951,7 +921,10 @@
   renderBookmarkList();
   applyFontScale();
   autoLoadFromServer().then(function(ok){
-    if(!ok) tryRestoreFromCache();
+    if(ok) return;
+    if(tryRestoreFromCache()) return;
+    loaderStatus.textContent = 'డేటా లోడ్ కాలేదు. ఇంటర్నెట్ కనెక్షన్‌ని తనిఖీ చేయండి.';
+    retryBtn.classList.remove('hidden');
   });
 
   if('serviceWorker' in navigator){
