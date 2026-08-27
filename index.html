@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
 <title>ఆంధ్రమహాభారతము — Reader</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#8a3a20">
+<meta name="description" content="Andhra Mahabharatham padyam reader">
+
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<!-- iOS: run as a standalone app when added to the home screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="మహాభారతము">
 <style>
   :root{
     --bg: #1b140d;
@@ -940,6 +953,12 @@
   autoLoadFromServer().then(function(ok){
     if(!ok) tryRestoreFromCache();
   });
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(){ /* offline support unavailable; app still works online */ });
+    });
+  }
 
   window.addEventListener('resize', function(){ goTo(currentIndex, false); });
 })();
