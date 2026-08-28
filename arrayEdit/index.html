@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Array Table Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>JS Array Table Editor</h1>
+      <div id="fileInfo" class="muted">No file loaded</div>
+    </div>
+    <div class="actions">
+      <label class="button primary">
+        Open .js
+        <input id="fileInput" type="file" accept=".js,text/javascript,application/javascript">
+      </label>
+      <button id="saveButton" disabled>Save New .js</button>
+      <button id="csvButton" disabled>Export CSV</button>
+      <button id="clearEditsButton" disabled>Clear Saved Edits</button>
+    </div>
+  </header>
+
+  <section class="toolbar">
+    <div class="status">
+      <span id="saveStatus" class="status-dot"></span>
+      <span id="saveText">Waiting for a file</span>
+    </div>
+    <div class="controls">
+      <label>Rows per page
+        <select id="pageSize">
+          <option>25</option>
+          <option selected>50</option>
+          <option>100</option>
+          <option>250</option>
+        </select>
+      </label>
+      <label>Search
+        <input id="searchInput" type="search" placeholder="Search any column...">
+      </label>
+      <button id="prevPage">‹</button>
+      <span id="pageInfo">Page 0 / 0</span>
+      <button id="nextPage">›</button>
+    </div>
+  </section>
+
+  <main>
+    <div id="message" class="message">
+      Open your JavaScript array file. The six original fields will be shown first,
+      followed by three editable columns. Your edits are saved locally as you type.
+    </div>
+
+    <div class="table-wrap">
+      <table id="dataTable" hidden>
+        <thead>
+          <tr id="headerRow"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <span>Local-first editor • edits are stored in IndexedDB • exported file never overwrites the original</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
