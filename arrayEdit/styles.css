@@ -225,8 +225,28 @@ footer {
 }
 
 
-/* Column resizing */
-th.resizable { position: sticky; top: 0; min-width: 60px; }
-th .resize-handle { position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:20; }
-th .resize-handle:hover, th .resize-handle.dragging { background:rgba(31,111,235,.35); }
-body.resizing, body.resizing * { cursor:col-resize !important; user-select:none !important; }
+/* Excel / Google Sheets style column resizing */
+#dataTable { table-layout: fixed; }
+#dataTable th { overflow: visible; }
+#dataTable th.resizable { position: sticky; }
+#dataTable .resize-handle {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+}
+#dataTable .resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background: transparent;
+}
+#dataTable .resize-handle:hover::after,
+#dataTable .resize-handle.dragging::after { background: #1f6feb; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
