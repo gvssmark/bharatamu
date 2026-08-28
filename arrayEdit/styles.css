@@ -223,3 +223,10 @@ footer {
   .topbar, .toolbar { flex-direction: column; align-items: stretch; }
   .table-wrap { max-height: calc(100vh - 280px); }
 }
+
+
+/* Column resizing */
+th.resizable { position: sticky; top: 0; min-width: 60px; }
+th .resize-handle { position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:20; }
+th .resize-handle:hover, th .resize-handle.dragging { background:rgba(31,111,235,.35); }
+body.resizing, body.resizing * { cursor:col-resize !important; user-select:none !important; }

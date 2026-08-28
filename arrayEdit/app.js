@@ -33,7 +33,7 @@ const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   [
-    "fileInput", "saveButton", "csvButton", "clearEditsButton",
+    "fileInput", "saveButton", "csvButton", "clearEditsButton", "clearDbButton",
     "fileInfo", "saveStatus", "saveText", "pageSize", "searchInput",
     "prevPage", "nextPage", "pageInfo", "message", "dataTable",
     "headerRow", "tableBody"
@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   els.saveButton.addEventListener("click", exportJs);
   els.csvButton.addEventListener("click", exportCsv);
   els.clearEditsButton.addEventListener("click", clearSavedEdits);
+  els.clearDbButton.addEventListener("click", clearEntireIndexedDb);
   els.pageSize.addEventListener("change", () => {
     state.pageSize = Number(els.pageSize.value);
     state.page = 1;
@@ -406,6 +407,16 @@ async function clearSavedEdits() {
   render();
 }
 
+async function clearEntireIndexedDb() {
+  if(!confirm("This will permanently delete ALL saved edits from this editor, for every JS file.\n\nYour original JS files on disk are not affected.\n\nContinue?")) return;
+  try {
+    const db=await openDb();
+    await new Promise((resolve,reject)=>{ const tx=db.transaction(["files","cells"],"readwrite"); tx.objectStore("files").clear(); tx.objectStore("cells").clear(); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error||new Error("Clear transaction aborted")); });
+    for(const row of state.rows) { row[6]=row[7]=row[8]=""; }
+    setStatus("saved","IndexedDB cleared"); render();
+  } catch(error) { console.error(error); setStatus("error","Could not clear IndexedDB"); alert("Could not clear IndexedDB.\n\n"+error.message); }
+}
+
 function queueCellSave(row, col, value, inputElement) {
   setStatus("busy", "Saving...");
 
@@ -431,10 +442,18 @@ function renderHeaders() {
   const headings = ["#", ...ORIGINAL_COLUMNS, ...EXTRA_COLUMNS];
   headings.forEach((name, index) => {
     const th = document.createElement("th");
+    th.className = "resizable";
+    th.dataset.col = index;
     th.textContent = name;
     if (index === 0) th.title = "Source row number";
+    const handle = document.createElement("span");
+    handle.className = "resize-handle";
+    handle.title = "Drag to resize column";
+    handle.addEventListener("mousedown", startColumnResize);
+    th.appendChild(handle);
     els.headerRow.appendChild(th);
   });
+  restoreColumnWidths();
 }
 
 function matches(row, query) {
@@ -443,6 +462,15 @@ function matches(row, query) {
     String(value ?? "").toLocaleLowerCase().includes(query)
   );
 }
+
+const COLUMN_WIDTH_KEY = "jsArrayTableEditor.columnWidths.v1";
+let resizeState = null;
+function getColumnWidths() { try { return JSON.parse(localStorage.getItem(COLUMN_WIDTH_KEY) || "{}"); } catch (_) { return {}; } }
+function restoreColumnWidths() { const widths=getColumnWidths(); els.headerRow.querySelectorAll("th[data-col]").forEach(th=>{ if(widths[th.dataset.col]) th.style.width=widths[th.dataset.col]+"px"; }); }
+function saveColumnWidth(col,width) { const widths=getColumnWidths(); widths[col]=Math.max(60,Math.round(width)); localStorage.setItem(COLUMN_WIDTH_KEY,JSON.stringify(widths)); }
+function startColumnResize(e) { e.preventDefault(); e.stopPropagation(); const th=e.currentTarget.parentElement; resizeState={th,col:Number(th.dataset.col),startX:e.clientX,startWidth:th.getBoundingClientRect().width}; e.currentTarget.classList.add("dragging"); document.body.classList.add("resizing"); document.addEventListener("mousemove",onColumnResize); document.addEventListener("mouseup",stopColumnResize); }
+function onColumnResize(e) { if(!resizeState) return; const w=Math.max(60,resizeState.startWidth+e.clientX-resizeState.startX); resizeState.th.style.width=w+"px"; const col=resizeState.col+1; els.dataTable.querySelectorAll(`tbody td:nth-child(${col}), thead th:nth-child(${col})`).forEach(c=>c.style.width=w+"px"); }
+function stopColumnResize() { if(!resizeState) return; saveColumnWidth(resizeState.col,resizeState.th.getBoundingClientRect().width); const h=resizeState.th.querySelector(".resize-handle"); if(h) h.classList.remove("dragging"); document.body.classList.remove("resizing"); document.removeEventListener("mousemove",onColumnResize); document.removeEventListener("mouseup",stopColumnResize); resizeState=null; }
 
 function updateFilter() {
   const q = state.search.trim().toLocaleLowerCase();
