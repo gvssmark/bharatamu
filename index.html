@@ -46,12 +46,12 @@
   /* ---------- Fixed header ---------- */
   header{
     position:relative; z-index:20;
-    height: var(--header-h);
+    height: calc(var(--header-h) + env(safe-area-inset-top));
     flex: 0 0 auto;
     background: linear-gradient(180deg, var(--rust) 0%, var(--rust-dark) 100%);
     color: #fdf3e2;
     display:flex; flex-direction:column; justify-content:center;
-    padding: 8px 12px 10px;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 10px;
     box-shadow: var(--shadow);
   }
   .hdr-row{ display:flex; align-items:center; gap:10px; }
@@ -87,7 +87,7 @@
   }
   #drawer.show{ transform: translateX(0); }
   .drawer-hdr{
-    padding: 18px 16px 12px; background: var(--rust); color:#fff;
+    padding: calc(18px + env(safe-area-inset-top)) 16px 12px; background: var(--rust); color:#fff;
     display:flex; justify-content:space-between; align-items:center;
   }
   .drawer-hdr b{ font-size:1.05rem; }
@@ -213,10 +213,10 @@
 
   /* ---------- Bottom nav ---------- */
   #bottomnav{
-    flex:0 0 auto; height: var(--nav-h);
+    flex:0 0 auto; height: calc(var(--nav-h) + env(safe-area-inset-bottom));
     background: #150f0a; color:#f2e3c5;
     display:flex; align-items:center; justify-content:space-between;
-    padding: 0 10px; z-index:20;
+    padding: 0 10px calc(env(safe-area-inset-bottom)) 10px; z-index:20;
   }
   #bottomnav button{
     background:none; border:none; color:#f2e3c5; font-size:1rem; cursor:pointer;
@@ -236,7 +236,7 @@
   #searchOverlay.show{ transform: translateY(0); }
   .search-hdr{
     flex:0 0 auto; display:flex; align-items:center; gap:8px;
-    padding: 14px 12px; background: var(--rust-dark);
+    padding: calc(14px + env(safe-area-inset-top)) 12px 14px; background: var(--rust-dark);
   }
   .search-hdr input{
     flex:1; padding:10px 12px; border-radius:8px; border:none; font-size:1rem;
@@ -254,7 +254,9 @@
   #loaderScreen{
     position:fixed; inset:0; z-index:50; background: var(--bg);
     display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px;
-    color: #f2e3c5; padding: 24px; text-align:center;
+    color: #f2e3c5;
+    padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+    text-align:center;
   }
   #loaderScreen h1{ font-size:1.4rem; color: var(--gold); margin:0; }
   #loaderScreen p{ color:#c9b98c; font-size:0.9rem; max-width:340px; margin:0; }
