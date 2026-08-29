@@ -17,6 +17,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="మహాభారతము">
+
+<!-- Reader fonts: NTR and Mandali (Telugu), selectable in the sidebar; Mandali is the default -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mandali&family=NTR&display=swap" rel="stylesheet">
+
 <style>
   :root{
     --bg: #1b140d;
@@ -33,6 +39,7 @@
     --verse-size: 1.15rem;
     --header-h: 84px;
     --nav-h: 64px;
+    --reader-font: 'Mandali';
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
   html,body{
@@ -72,6 +79,18 @@
     padding: 0 6px;
   }
 
+  /* ---------- Away-from-primary-bookmark banner ---------- */
+  #awayBanner{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#4a3319; color:#f4e3c0; padding:8px 14px; font-size:0.82rem; z-index:15;
+  }
+  #awayBanner span{ flex:1 1 auto; min-width:0; }
+  #awayBanner button{
+    background:var(--gold); color:#2a1e12; border:none; padding:7px 12px; border-radius:6px;
+    font-size:0.8rem; font-weight:bold; cursor:pointer; white-space:nowrap; font-family:inherit;
+    flex:0 0 auto;
+  }
+
   /* ---------- Side drawer ---------- */
   #overlay{
     position:fixed; inset:0; background: rgba(0,0,0,0.45);
@@ -103,13 +122,13 @@
     background:#fff; color:var(--rust-dark); font-size:1rem; cursor:pointer;
   }
   .font-controls span{ font-size:0.85rem; color:var(--ink-soft); min-width:40px; text-align:center; }
-  .bookmark-list{ list-style:none; margin:0; padding:0; }
-  .bookmark-list li{
-    padding: 8px 6px; font-size:0.88rem; border-radius:4px; cursor:pointer;
-    color: var(--ink); display:flex; justify-content:space-between; gap:6px;
+
+  .pill-toggle{ display:flex; gap:8px; }
+  .pill-btn{
+    flex:1; padding:9px 6px; border-radius:8px; border:1px solid var(--rust);
+    background:#fff; color:var(--rust-dark); font-size:0.85rem; cursor:pointer; font-family:inherit;
   }
-  .bookmark-list li:active{ background: var(--paper-soft); }
-  .bookmark-list li .bm-num{ color:var(--rust-dark); font-weight:bold; flex:0 0 auto; }
+  .pill-btn.active{ background:var(--rust); color:#fff; }
 
   /* ---------- Nav tree: parva > aswasam > topic ---------- */
   .nav-tree{ font-size:0.88rem; }
@@ -138,11 +157,10 @@
   .nav-topics li:active{ background: var(--paper-soft); }
   .nav-topics li.current{ background: var(--paper-soft); font-weight:bold; color:var(--rust-dark); }
   .nav-topics li.current .nav-count{ color:var(--rust-dark); }
-  .bookmark-list li .bm-del{ color:#a33; font-size:0.8rem; flex:0 0 auto; }
   .empty-note{ color: var(--ink-soft); font-size:0.82rem; padding: 4px 6px; }
   .drawer-btn{
     width:100%; text-align:left; background:none; border:none; padding:9px 6px;
-    font-size:0.88rem; color: var(--rust-dark); cursor:pointer; font-family:inherit;
+    font-size:0.9rem; color: var(--rust-dark); cursor:pointer; font-family:inherit;
   }
 
   /* ---------- Stage ---------- */
@@ -183,23 +201,29 @@
   .verse-part + .verse-part{ margin-top: 14px; }
   .verse-part .ptype{ font-size:0.78rem; color:var(--ink-soft); margin-bottom:2px; }
   .verse-text{
+    font-family: var(--reader-font), 'Noto Serif Telugu', serif;
     font-size: var(--verse-size); line-height:1.75; white-space:pre-line;
   }
 
   .meaning-pane{
-    flex: 1 1 45%; min-height:0;
+    flex: 1 1 45%; min-height:0; display:flex; flex-direction:column;
     background: var(--paper-soft);
     margin: 0 10px; border-radius: 0 0 10px 10px;
     box-shadow: var(--shadow);
-    overflow-y:auto; padding: 14px 18px 18px;
+    padding: 12px 18px 14px;
     border-top: 2px dashed var(--line);
-    -webkit-overflow-scrolling: touch;
   }
-  .meaning-pane h5{
-    margin: 0 0 6px; font-size:0.72rem; letter-spacing:1px; text-transform:uppercase;
-    color: var(--rust-dark);
+  .meaning-tabs{ flex:0 0 auto; display:flex; gap:6px; margin-bottom:10px; }
+  .meaning-tab-btn{
+    flex:1; padding:7px 4px; border-radius:6px; border:1px solid var(--rust);
+    background:#fff; color:var(--rust-dark); font-size:0.8rem; cursor:pointer; font-family:inherit;
   }
-  .meaning-text{ font-size:0.98rem; line-height:1.6; color: var(--ink); white-space:pre-line; }
+  .meaning-tab-btn.active{ background:var(--rust); color:#fff; }
+  .meaning-content{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling: touch; }
+  .meaning-text{
+    font-family: var(--reader-font), 'Noto Serif Telugu', serif;
+    font-size:0.98rem; line-height:1.6; color: var(--ink); white-space:pre-line;
+  }
   .meaning-empty{ font-size:0.88rem; color: var(--ink-soft); font-style:italic; }
 
   .resize-handle{
@@ -210,6 +234,18 @@
   .resize-handle::before{
     content:""; width:36px; height:4px; border-radius:2px; background: var(--line);
   }
+
+  /* ---------- Topic-wise screen (verse text only — no ardha/bhava/visesha) ---------- */
+  .topic-scroll{
+    flex:1; min-height:0; overflow-y:auto; background: var(--paper);
+    margin: 0 10px 10px; border-radius: 10px; box-shadow: var(--shadow);
+    padding: 18px 18px 22px; -webkit-overflow-scrolling: touch;
+  }
+  .topic-hdr{
+    font-weight:bold; color:var(--rust-dark); margin-bottom:14px; font-size:1rem;
+    border-bottom:2px dashed var(--line); padding-bottom:8px;
+  }
+  .topic-block + .topic-block{ margin-top:22px; padding-top:18px; border-top:1px solid var(--line); }
 
   /* ---------- Bottom nav ---------- */
   #bottomnav{
@@ -227,13 +263,13 @@
   #progress{ font-size:0.78rem; color:#c9b98c; text-align:center; }
   #progress b{ color:#f2e3c5; }
 
-  /* ---------- Search overlay ---------- */
-  #searchOverlay{
+  /* ---------- Search / Starred overlays (shared shell) ---------- */
+  #searchOverlay, #starredOverlay{
     position:fixed; inset:0; background: var(--bg); z-index:40;
     display:flex; flex-direction:column;
     transform: translateY(-100%); transition: transform 0.25s ease;
   }
-  #searchOverlay.show{ transform: translateY(0); }
+  #searchOverlay.show, #starredOverlay.show{ transform: translateY(0); }
   .search-hdr{
     flex:0 0 auto; display:flex; align-items:center; gap:8px;
     padding: calc(14px + env(safe-area-inset-top)) 12px 14px; background: var(--rust-dark);
@@ -242,12 +278,22 @@
     flex:1; padding:10px 12px; border-radius:8px; border:none; font-size:1rem;
     font-family: inherit; background:#fff8ea;
   }
+  .search-hdr .hdr-title-mini{ flex:1; color:#fdf3e2; font-weight:bold; font-size:1rem; }
+  .hdr-mini-btn{
+    background:none; border:1px solid rgba(255,255,255,0.5); color:#fdf3e2;
+    font-size:0.78rem; padding:7px 11px; border-radius:6px; cursor:pointer;
+    white-space:nowrap; font-family:inherit; flex:0 0 auto;
+  }
   .search-results{ flex:1; overflow-y:auto; background: var(--paper); padding: 6px 0; }
-  .search-item{ padding: 12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .search-item{ position:relative; padding: 12px 44px 12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
   .search-item:active{ background: var(--paper-soft); }
   .search-item .si-loc{ font-size:0.72rem; color: var(--rust-dark); margin-bottom:3px; }
   .search-item .si-text{ font-size:0.9rem; color: var(--ink); line-height:1.4; }
   .search-item mark{ background: #f4d98a; color: inherit; }
+  .search-item .si-del{
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    color:#a33; font-size:1.15rem; padding:8px; line-height:1;
+  }
   .search-empty{ padding: 24px; text-align:center; color: var(--ink-soft); }
 
   /* ---------- Loader ---------- */
@@ -280,6 +326,11 @@
     <div class="hdr-sub" id="hdrSub">—</div>
   </header>
 
+  <div id="awayBanner" class="hidden">
+    <span>ప్రాథమిక బుక్‌మార్క్ నుండి దూరంగా ఉన్నారు</span>
+    <button id="goPrimaryBtn">🔖 ప్రాథమిక బుక్‌మార్క్‌కు వెళ్ళండి</button>
+  </div>
+
   <div id="stage">
     <div id="track"></div>
   </div>
@@ -308,13 +359,25 @@
       </div>
     </div>
     <div class="drawer-section">
+      <h4>ఫాంట్</h4>
+      <div class="pill-toggle">
+        <button class="pill-btn" id="fontMandaliBtn">Mandali</button>
+        <button class="pill-btn" id="fontNTRBtn">NTR</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h4>ప్రదర్శన విధానం</h4>
+      <div class="pill-toggle">
+        <button class="pill-btn" id="modePadyamBtn">పద్యం వారీగా</button>
+        <button class="pill-btn" id="modeTopicBtn">విషయం వారీగా</button>
+      </div>
+    </div>
+    <div class="drawer-section">
       <h4>విషయసూచిక</h4>
       <div class="nav-tree" id="navTree"></div>
     </div>
     <div class="drawer-section">
-      <h4>బుక్‌మార్కులు</h4>
-      <ul class="bookmark-list" id="bookmarkList"></ul>
-      <div class="empty-note" id="bookmarkEmpty">బుక్‌మార్కులు లేవు</div>
+      <button class="drawer-btn" id="starredMenuBtn">⭐ స్టార్ చేసిన పద్యాలు</button>
     </div>
   </div>
 </div>
@@ -323,8 +386,18 @@
   <div class="search-hdr">
     <button class="icon-btn" id="closeSearchBtn">✕</button>
     <input type="text" id="searchInput" placeholder="పద్యంలో వెతకండి…">
+    <button class="hdr-mini-btn" id="clearSearchBtn">క్లియర్</button>
   </div>
   <div class="search-results" id="searchResults"></div>
+</div>
+
+<div id="starredOverlay">
+  <div class="search-hdr">
+    <button class="icon-btn" id="closeStarredBtn">✕</button>
+    <div class="hdr-title-mini">స్టార్ చేసిన పద్యాలు</div>
+    <button class="hdr-mini-btn" id="clearStarredBtn">అన్నీ తొలగించండి</button>
+  </div>
+  <div class="search-results" id="starredResults"></div>
 </div>
 
 <div id="loaderScreen">
@@ -333,34 +406,126 @@
   <button class="load-btn hidden" id="retryBtn">🔄 మళ్ళీ ప్రయత్నించండి</button>
 </div>
 
-<script src="padyams.js"></script>
+<script src="datafiles/01Adi.js"></script>
+<script src="datafiles/02sabhA.js"></script>
+<script src="datafiles/03AraNya.js"></script>
+<script src="datafiles/04virATa.js"></script>
+<script src="datafiles/05udyOga.js"></script>
+<script src="datafiles/06bhIShma.js"></script>
+<script src="datafiles/07drONa.js"></script>
+<script src="datafiles/08karNa.js"></script>
+<script src="datafiles/09Salya.js"></script>
+<script src="datafiles/10sauptika.js"></script>
+<script src="datafiles/11strI.js"></script>
+<script src="datafiles/12SAMti.js"></script>
+<script src="datafiles/13AnuSAsanika.js"></script>
+<script src="datafiles/14aSvamEdha.js"></script>
+<script src="datafiles/15ASramavAsa.js"></script>
+<script src="datafiles/16mausala.js"></script>
+<script src="datafiles/17mahAprasthAnika.js"></script>
+<script src="datafiles/18svargArOhaNa.js"></script>
+<script src="dataupdatedOn.js"></script>
 <script>
-  // If padyams.js is missing (e.g. not yet uploaded), padyamData will
-  // simply be undefined and the app falls back to its local cache, if any.
+  // Each datafiles/NNname.js declares "var <Name> = [[...], ...]" — a top-level
+  // var DOES attach to window (unlike const/let), so window[name] safely reads
+  // it whether or not that particular file has been uploaded yet. Files not
+  // yet present (08–15 initially) are simply skipped; this list is in strict
+  // parva order (01–18) so the combined array stays correctly ordered no
+  // matter which files exist yet, and adding a missing one later never shifts
+  // any padyam that comes before it.
+  //
+  // dataupdatedOn.js (optional, added later) declares "var dataUpdatedOn = 'DDMMYYYY';"
+  // — used only as a cheap "did the data change" check for the IndexedDB backup cache.
+  var PARVA_VAR_NAMES = [
+    'Adi','sabhA','AraNya','virATa','udyOga','bhIShma','drONa','karNa','Salya',
+    'sauptika','strI','SAMti','AnuSAsanika','aSvamEdha','ASramavAsa',
+    'mausala','mahAprasthAnika','svargArOhaNa'
+  ];
+  var padyams = [];
+  PARVA_VAR_NAMES.forEach(function(name){
+    var arr = window[name];
+    if(Array.isArray(arr) && arr.length) padyams = padyams.concat(arr);
+  });
+</script>
+<script>
 (function(){
   "use strict";
 
   // ------------------------------------------------------------------
+  // IndexedDB (replaces localStorage for all persisted state)
+  // ------------------------------------------------------------------
+  const DB_NAME = 'mbhReaderDB';
+  const DB_VERSION = 1;
+  const DB_STORE = 'kv';
+
+  let dbPromise = null;
+  function idbOpen(){
+    return new Promise(function(resolve, reject){
+      if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; }
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = function(){
+        const db = req.result;
+        if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }
+  function getDb(){
+    if(!dbPromise) dbPromise = idbOpen();
+    return dbPromise;
+  }
+  function idbGet(key){
+    return getDb().then(function(db){
+      return new Promise(function(resolve, reject){
+        const tx = db.transaction(DB_STORE, 'readonly');
+        const req = tx.objectStore(DB_STORE).get(key);
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ reject(req.error); };
+      });
+    }).catch(function(){ return undefined; });
+  }
+  function idbSet(key, value){
+    return getDb().then(function(db){
+      return new Promise(function(resolve, reject){
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        const req = tx.objectStore(DB_STORE).put(value, key);
+        req.onsuccess = function(){ resolve(true); };
+        req.onerror = function(){ reject(req.error); };
+      });
+    }).catch(function(){ return false; });
+  }
+
+  // ------------------------------------------------------------------
   // State
   // ------------------------------------------------------------------
-  const STORAGE_KEY_DATA   = "mbh_reader_data_v1";
-  const STORAGE_KEY_FONT   = "mbh_reader_font_v1";
-  const STORAGE_KEY_BOOK   = "mbh_reader_bookmarks_v1";
-  const STORAGE_KEY_POS    = "mbh_reader_pos_v1";
+  const MEANING_LABELS = { ardha: 'అర్థం', bhava: 'భావం', visesha: 'విశేషం' };
 
-  let rawData = [];        // parsed JSON as produced by the extractor
-  let screens = [];        // flattened list of {parva, aswasam, topic, number, type, parts, text, bhavam}
-  let currentIndex = 0;
+  let rawData = [];         // parsed rows as produced by the datafiles
+  let screens = [];         // flattened list of {parva, aswasam, topic, number, type, parts, text, textNorm, ardha, bhava, visesha}
+  let topics = [];          // list of {parva, aswasam, topicLabel, keyStr, indices:[padyamIdx,...]}
+  let padyamToTopicIndex = []; // padyamIdx -> topicIdx
+
+  let viewMode = 'padyam';  // 'padyam' | 'topic'
+  let currentIndex = 0;     // index into screens[] (padyam mode) or topics[] (topic mode)
   let fontScale = 1.0;
-  let bookmarks = {};       // key -> true   (key = parva#aswasam#number#index)
+  let fontFamily = 'Mandali'; // 'Mandali' | 'NTR'
+  let activeMeaningTab = 'bhava'; // 'ardha' | 'bhava' | 'visesha'
+  let starredMap = {};      // padyamKey -> {parva, aswasam, number, type, snippet}
+
+  // "Primary bookmark" = the position normal browsing (prev/next/swipe/TOC)
+  // last left off at. It doubles as the resume-on-reopen position.
+  let primary = { mode: 'padyam', key: null };
+  let awayFromPrimary = false; // true after jumping in via search/starred results
+
   let touchStartX = 0, touchStartY = 0, dragging = false, dragDX = 0;
+  let renderedIdx = new Set();
 
   // ------------------------------------------------------------------
   // DOM refs
   // ------------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
   const track = $('track');
-  const hdrTitle = $('hdrTitle');
   const hdrSub = $('hdrSub');
   const progressEl = $('progress');
   const prevBtn = $('prevBtn');
@@ -368,15 +533,17 @@
   const overlay = $('overlay');
   const drawer = $('drawer');
   const navTreeEl = $('navTree');
-  const bookmarkListEl = $('bookmarkList');
-  const bookmarkEmpty = $('bookmarkEmpty');
   const fontLabel = $('fontLabel');
+  const awayBanner = $('awayBanner');
   const searchOverlay = $('searchOverlay');
   const searchInput = $('searchInput');
   const searchResults = $('searchResults');
+  const starredOverlay = $('starredOverlay');
+  const starredResults = $('starredResults');
   const loaderScreen = $('loaderScreen');
   const loaderStatus = $('loaderStatus');
   const retryBtn = $('retryBtn');
+  const stage = $('stage');
 
   // ------------------------------------------------------------------
   // Data loading
@@ -391,10 +558,12 @@
     return normalizeWs(String(s || '').replace(/[\(\[（【][^\)\]）】]*[\)\]）】]/g, ''));
   }
 
-  // Converts the flat row format [parva, aswasam, header, number, type, text]
-  // into screen objects. When a "సీ." (Seesam) row has no number, it is always
-  // immediately followed by its tail verse (ఆ. or తే.) which carries the real
-  // number — the two rows are merged into a single padyam with two display parts.
+  // Converts the flat row format
+  // [parva, aswasam, header, number, type, text, ardha, bhava, visesha]
+  // (the last three are optional, added later) into screen objects. When a
+  // "సీ." (Seesam) row has no number, it is always immediately followed by
+  // its tail verse (ఆ. or తే.) which carries the real number — the two rows
+  // are merged into a single padyam with two display parts.
   function flattenRows(rows){
     const out = [];
     for(let i = 0; i < rows.length; i++){
@@ -405,9 +574,13 @@
       const number = r[3] || '';
       const type = r[4] || '';
       const text = r[5] || '';
+      const ardha = r[6] || '';
+      const bhava = r[7] || '';
+      const visesha = r[8] || '';
 
       if(type === 'సీ.' && !number && rows[i + 1]){
         const next = rows[i + 1];
+        const combinedText = text + '\n' + (next[5] || '');
         out.push({
           parva: parva, aswasam: aswasam, topic: topic,
           number: next[3] || '',
@@ -416,8 +589,11 @@
             { type: type, lines: text.split('\n'), text: text },
             { type: next[4] || '', lines: (next[5] || '').split('\n'), text: next[5] || '' }
           ],
-          text: text + '\n' + (next[5] || ''),
-          bhavam: null
+          text: combinedText,
+          textNorm: combinedText.normalize('NFC').toLowerCase(),
+          ardha: next[6] || ardha,
+          bhava: next[7] || bhava,
+          visesha: next[8] || visesha
         });
         i++; // the tail row was consumed as part of this padyam
         continue;
@@ -428,62 +604,81 @@
         number: number, type: type,
         parts: [{ type: type, lines: text.split('\n'), text: text }],
         text: text,
-        bhavam: null
+        textNorm: text.normalize('NFC').toLowerCase(),
+        ardha: ardha, bhava: bhava, visesha: visesha
       });
     }
     return out;
   }
 
-  function loadDataInto(rows){
+  function padyamKey(s){
+    return s.parva + '|' + s.aswasam + '|' + s.number + '|' + s.type;
+  }
+
+  async function loadDataInto(rows){
     rawData = rows;
     screens = flattenRows(rows);
     if(screens.length === 0){
-      alert('ఈ ఫైల్‌లో పద్యాలు కనబడలేదు (No padyams found in this file).');
+      alert('పద్యాలు కనబడలేదు (No padyams found).');
       return false;
     }
     loaderScreen.classList.add('hidden');
-    buildNavTree();
-    restorePosition();
+    buildNavTree(); // also builds topics[] / padyamToTopicIndex[]
+
+    starredMap = (await idbGet('starred_v1')) || {};
+    const savedPrimary = await idbGet('primary_v1');
+    if(savedPrimary && savedPrimary.key && (savedPrimary.mode === 'padyam' || savedPrimary.mode === 'topic')){
+      primary = savedPrimary;
+    }
+
+    if(primary.key){
+      viewMode = primary.mode;
+      currentIndex = resolvePrimaryIndex();
+    } else {
+      viewMode = 'padyam';
+      currentIndex = 0;
+      primary = { mode: viewMode, key: currentKeyForIndex(viewMode, currentIndex) };
+      idbSet('primary_v1', primary);
+    }
+    awayFromPrimary = false;
+    updateModeToggleUI();
+
     renderTrack();
     goTo(currentIndex, false);
     return true;
   }
 
-  function autoLoadFromServer(){
-    // padyams.js (loaded via <script src="padyams.js">) defines a global
-    // `padyamData` array — this works both on GitHub Pages and when the file
-    // is opened locally (unlike fetch(), which fails on file:// due to CORS).
-    // Note: padyams.js declares "const padyamData = [...]" — a top-level
-    // const/let does NOT become a property of window, so we must reference
-    // the bare identifier here rather than window.padyamData. `typeof` is
-    // safe to use even if padyams.js failed to load (no ReferenceError).
-    if(typeof padyamData !== 'undefined' && Array.isArray(padyamData) && padyamData.length){
-      cacheData(padyamData);
-      return Promise.resolve(loadDataInto(padyamData));
+  async function autoLoadFromServer(){
+    // "padyams" is built just above from all available datafiles/*.js files
+    // (each declares a top-level "var <Name>" which attaches to window, so
+    // partial uploads — e.g. only some parvas present — degrade gracefully).
+    if(typeof padyams !== 'undefined' && Array.isArray(padyams) && padyams.length){
+      const newDate = (typeof dataUpdatedOn !== 'undefined') ? dataUpdatedOn : null;
+      try{
+        const cachedDate = await idbGet('dataUpdatedOn_v1');
+        if(!newDate || newDate !== cachedDate){
+          // Data has changed (or we can't tell) — refresh the IndexedDB backup.
+          await idbSet('data_v2', padyams);
+          if(newDate) await idbSet('dataUpdatedOn_v1', newDate);
+        }
+      }catch(e){ /* IndexedDB unavailable — reader still works this session */ }
+      return await loadDataInto(padyams);
     }
-    return Promise.resolve(false);
-  }
-
-  function tryRestoreFromCache(){
-    try{
-      const cached = localStorage.getItem(STORAGE_KEY_DATA);
-      if(cached){
-        const data = JSON.parse(cached);
-        return loadDataInto(data);
-      }
-    }catch(e){ /* ignore corrupt cache */ }
     return false;
   }
 
-  function cacheData(data){
-    try{ localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(data)); }
-    catch(e){ /* storage full or unavailable — reader still works this session */ }
+  async function tryRestoreFromCache(){
+    try{
+      const cached = await idbGet('data_v2');
+      if(cached && cached.length) return await loadDataInto(cached);
+    }catch(e){ /* ignore corrupt/missing cache */ }
+    return false;
   }
 
   retryBtn.addEventListener('click', function(){ window.location.reload(); });
 
   // ------------------------------------------------------------------
-  // Rendering
+  // Rendering helpers
   // ------------------------------------------------------------------
   function escapeHtml(s){
     return String(s || '').replace(/[&<>"']/g, function(c){
@@ -491,24 +686,36 @@
     });
   }
 
-  function screenKey(i){
-    const s = screens[i];
-    return s.parva + '#' + s.aswasam + '#' + s.number + '#' + i;
-  }
-
-  function renderScreen(s, idx){
-    const partsHtml = s.parts.map(function(pt){
+  function renderParts(s){
+    return s.parts.map(function(pt){
       return '<div class="verse-part">' +
         (s.parts.length > 1 ? '<div class="ptype">' + escapeHtml(pt.type) + '</div>' : '') +
         '<div class="verse-text">' + escapeHtml(pt.lines ? pt.lines.join('\n') : pt.text) + '</div>' +
         '</div>';
     }).join('');
+  }
 
-    const bookmarked = !!bookmarks[screenKey(idx)];
+  function meaningContentHtml(s, tab){
+    const val = s[tab];
+    if(val) return '<div class="meaning-text">' + escapeHtml(val) + '</div>';
+    return '<div class="meaning-empty">' + MEANING_LABELS[tab] + ' అందుబాటులో లేదు.</div>';
+  }
 
-    const meaningHtml = s.bhavam
-      ? '<div class="meaning-text">' + escapeHtml(s.bhavam) + '</div>'
-      : '<div class="meaning-empty">భావం అందుబాటులో లేదు.</div>';
+  function activeCount(){
+    return viewMode === 'topic' ? topics.length : screens.length;
+  }
+
+  function currentKeyForIndex(mode, idx){
+    return mode === 'topic' ? topics[idx].keyStr : padyamKey(screens[idx]);
+  }
+
+  // ---- padyam-wise screen: verse + ardha/bhava/visesha tabs ----
+  function renderScreen(s, idx){
+    const starred = !!starredMap[padyamKey(s)];
+    const tabsHtml = ['ardha', 'bhava', 'visesha'].map(function(tab){
+      return '<button class="meaning-tab-btn ' + (activeMeaningTab === tab ? 'active' : '') +
+        '" data-tab="' + tab + '">' + MEANING_LABELS[tab] + '</button>';
+    }).join('');
 
     const div = document.createElement('div');
     div.className = 'screen';
@@ -517,40 +724,67 @@
         '<div class="verse-meta">' +
           (s.number ? '<span class="verse-badge">#' + escapeHtml(s.number) + '</span>' : '') +
           '<span class="verse-type">' + escapeHtml(s.type || '') + '</span>' +
-          '<button class="verse-star ' + (bookmarked ? 'on' : '') + '" data-idx="' + idx + '">★</button>' +
+          '<button class="verse-star ' + (starred ? 'on' : '') + '" data-idx="' + idx + '">★</button>' +
         '</div>' +
-        partsHtml +
+        renderParts(s) +
       '</div>' +
       '<div class="resize-handle"></div>' +
       '<div class="meaning-pane">' +
-        '<h5>భావం</h5>' +
-        meaningHtml +
+        '<div class="meaning-tabs">' + tabsHtml + '</div>' +
+        '<div class="meaning-content">' + meaningContentHtml(s, activeMeaningTab) + '</div>' +
+      '</div>';
+    return div;
+  }
+
+  // ---- topic-wise screen: every padyam's verse text in the topic, stacked
+  //      (no ardha/bhava/visesha here, by design) ----
+  function renderTopicScreen(t, idx){
+    const blocksHtml = t.indices.map(function(padIdx){
+      const s = screens[padIdx];
+      const starred = !!starredMap[padyamKey(s)];
+      return '<div class="topic-block">' +
+        '<div class="verse-meta">' +
+          (s.number ? '<span class="verse-badge">#' + escapeHtml(s.number) + '</span>' : '') +
+          '<span class="verse-type">' + escapeHtml(s.type || '') + '</span>' +
+          '<button class="verse-star ' + (starred ? 'on' : '') + '" data-idx="' + padIdx + '">★</button>' +
+        '</div>' +
+        renderParts(s) +
+      '</div>';
+    }).join('');
+
+    const div = document.createElement('div');
+    div.className = 'screen topic-screen';
+    div.innerHTML =
+      '<div class="topic-scroll">' +
+        '<div class="topic-hdr">' + escapeHtml(t.aswasam) + (t.topicLabel ? ' · ' + escapeHtml(t.topicLabel) : '') + '</div>' +
+        blocksHtml +
       '</div>';
     return div;
   }
 
   function renderTrack(){
     track.innerHTML = '';
-    // Virtualize: render only current +/- 1 for performance on large datasets.
-    screens.forEach(function(s, idx){
+    renderedIdx = new Set();
+    const count = activeCount();
+    for(let i = 0; i < count; i++){
       const placeholder = document.createElement('div');
       placeholder.className = 'screen';
-      placeholder.dataset.idx = idx;
+      placeholder.dataset.idx = i;
       track.appendChild(placeholder);
-    });
+    }
     applyFontScale();
     renderVisibleRange();
   }
 
-  let renderedIdx = new Set();
   function renderVisibleRange(){
+    const count = activeCount();
     const lo = Math.max(0, currentIndex - 1);
-    const hi = Math.min(screens.length - 1, currentIndex + 1);
+    const hi = Math.min(count - 1, currentIndex + 1);
     for(let i = lo; i <= hi; i++){
       if(renderedIdx.has(i)) continue;
-      const real = renderScreen(screens[i], i);
+      const real = viewMode === 'topic' ? renderTopicScreen(topics[i], i) : renderScreen(screens[i], i);
       real.dataset.idx = i;
-      track.replaceChild(real, track.children[i]);
+      if(track.children[i]) track.replaceChild(real, track.children[i]);
       renderedIdx.add(i);
     }
   }
@@ -560,33 +794,53 @@
     fontLabel.textContent = Math.round(fontScale * 100) + '%';
   }
 
+  function applyFontFamily(){
+    document.documentElement.style.setProperty('--reader-font', "'" + fontFamily + "'");
+    $('fontMandaliBtn').classList.toggle('active', fontFamily === 'Mandali');
+    $('fontNTRBtn').classList.toggle('active', fontFamily === 'NTR');
+  }
+
   function updateHeader(){
-    const s = screens[currentIndex];
-    if(!s) return;
-    hdrSub.textContent = s.aswasam + (s.topic ? ' · ' + s.topic : '');
+    if(viewMode === 'topic'){
+      const t = topics[currentIndex];
+      if(!t) return;
+      hdrSub.textContent = t.aswasam + (t.topicLabel ? ' · ' + t.topicLabel : '');
+    } else {
+      const s = screens[currentIndex];
+      if(!s) return;
+      hdrSub.textContent = s.aswasam + (s.topic ? ' · ' + s.topic : '');
+    }
   }
 
   function updateProgress(){
-    progressEl.innerHTML = '<b>' + (currentIndex + 1) + '</b> / ' + screens.length;
+    const count = activeCount();
+    progressEl.innerHTML = '<b>' + (currentIndex + 1) + '</b> / ' + count;
     prevBtn.disabled = currentIndex === 0;
-    nextBtn.disabled = currentIndex === screens.length - 1;
+    nextBtn.disabled = currentIndex === count - 1;
   }
 
-  function savePosition(){
-    try{ localStorage.setItem(STORAGE_KEY_POS, String(currentIndex)); }catch(e){}
-  }
-  function restorePosition(){
-    try{
-      const saved = localStorage.getItem(STORAGE_KEY_POS);
-      if(saved !== null){
-        const n = parseInt(saved, 10);
-        if(!isNaN(n) && n >= 0 && n < screens.length) currentIndex = n;
-      }
-    }catch(e){}
+  function updateAwayBanner(){
+    awayBanner.classList.toggle('hidden', !awayFromPrimary);
   }
 
+  // ------------------------------------------------------------------
+  // Primary bookmark
+  // ------------------------------------------------------------------
+  function resolvePrimaryIndex(){
+    if(primary.mode === 'topic'){
+      for(let i = 0; i < topics.length; i++){ if(topics[i].keyStr === primary.key) return i; }
+    } else {
+      for(let i = 0; i < screens.length; i++){ if(padyamKey(screens[i]) === primary.key) return i; }
+    }
+    return 0; // data changed since this was saved — fall back to the start
+  }
+
+  // ------------------------------------------------------------------
+  // Navigation
+  // ------------------------------------------------------------------
   function goTo(idx, animate){
-    if(idx < 0 || idx >= screens.length) return;
+    const count = activeCount();
+    if(idx < 0 || idx >= count) return;
     currentIndex = idx;
     renderVisibleRange();
     const x = -idx * 100;
@@ -594,9 +848,67 @@
     track.style.transform = 'translateX(' + x + '%)';
     updateHeader();
     updateProgress();
-    savePosition();
+
+    if(!awayFromPrimary){
+      // Normal browsing (prev/next/swipe/TOC): this becomes the new primary bookmark.
+      primary = { mode: viewMode, key: currentKeyForIndex(viewMode, idx) };
+      idbSet('primary_v1', primary);
+    } else if(viewMode === primary.mode && currentKeyForIndex(viewMode, idx) === primary.key){
+      // Swiped/navigated back to exactly the primary bookmark — end the excursion.
+      awayFromPrimary = false;
+    }
+    updateAwayBanner();
     highlightNavTreeCurrent();
   }
+
+  // Used by search results / starred items: always lands in padyam-wise mode,
+  // and starts (or continues) an excursion that leaves the primary bookmark
+  // untouched until the user explicitly returns to it (or swipes back onto it).
+  function navigateAway(padyamIdx){
+    if(viewMode !== 'padyam'){
+      viewMode = 'padyam';
+      renderTrack();
+    }
+    awayFromPrimary = true;
+    goTo(padyamIdx, true);
+  }
+
+  function goToPrimary(){
+    if(viewMode !== primary.mode){
+      viewMode = primary.mode;
+      renderTrack();
+    }
+    awayFromPrimary = false;
+    goTo(resolvePrimaryIndex(), true);
+    updateModeToggleUI();
+  }
+  $('goPrimaryBtn').addEventListener('click', goToPrimary);
+
+  // ------------------------------------------------------------------
+  // View mode toggle (padyam-wise / topic-wise)
+  // ------------------------------------------------------------------
+  function updateModeToggleUI(){
+    $('modePadyamBtn').classList.toggle('active', viewMode === 'padyam');
+    $('modeTopicBtn').classList.toggle('active', viewMode === 'topic');
+  }
+  function setViewMode(mode){
+    if(mode === viewMode) return;
+    if(mode === 'topic'){
+      const topicIdx = padyamToTopicIndex[currentIndex] != null ? padyamToTopicIndex[currentIndex] : 0;
+      viewMode = 'topic';
+      renderTrack();
+      goTo(topicIdx, false);
+    } else {
+      const t = topics[currentIndex];
+      const padIdx = (t && t.indices.length) ? t.indices[0] : 0;
+      viewMode = 'padyam';
+      renderTrack();
+      goTo(padIdx, false);
+    }
+    updateModeToggleUI();
+  }
+  $('modePadyamBtn').addEventListener('click', function(){ setViewMode('padyam'); });
+  $('modeTopicBtn').addEventListener('click', function(){ setViewMode('topic'); });
 
   // ------------------------------------------------------------------
   // Nav buttons + keyboard
@@ -606,14 +918,13 @@
   document.addEventListener('keydown', function(e){
     if(e.key === 'ArrowLeft') goTo(currentIndex - 1);
     if(e.key === 'ArrowRight') goTo(currentIndex + 1);
-    if(e.key === 'Escape'){ closeDrawer(); closeSearch(); }
+    if(e.key === 'Escape'){ closeDrawer(); closeSearch(); closeStarred(); }
   });
 
   // ------------------------------------------------------------------
   // Swipe handling (horizontal-dominant only, so vertical scroll in
   // verse/meaning panes keeps working)
   // ------------------------------------------------------------------
-  const stage = $('stage');
   stage.addEventListener('touchstart', function(e){
     const t = e.touches[0];
     touchStartX = t.clientX; touchStartY = t.clientY;
@@ -637,10 +948,11 @@
   stage.addEventListener('touchend', function(){
     if(!dragging) return;
     dragging = false;
+    const count = activeCount();
     const threshold = stage.clientWidth * 0.18;
     if(dragDX > threshold && currentIndex > 0){
       goTo(currentIndex - 1);
-    } else if(dragDX < -threshold && currentIndex < screens.length - 1){
+    } else if(dragDX < -threshold && currentIndex < count - 1){
       goTo(currentIndex + 1);
     } else {
       goTo(currentIndex, true);
@@ -649,50 +961,91 @@
   });
 
   // ------------------------------------------------------------------
-  // Bookmark toggle (event delegation, since screens render lazily)
+  // Track click delegation: star toggle + meaning-tab switch
   // ------------------------------------------------------------------
   track.addEventListener('click', function(e){
-    const btn = e.target.closest('.verse-star');
-    if(!btn) return;
-    const idx = Number(btn.dataset.idx);
-    const key = screenKey(idx);
-    if(bookmarks[key]) delete bookmarks[key];
-    else bookmarks[key] = { idx: idx, label: (screens[idx].aswasam + ' · #' + (screens[idx].number || '—')) };
-    saveBookmarks();
-    btn.classList.toggle('on');
-    renderBookmarkList();
+    const tabBtn = e.target.closest('.meaning-tab-btn');
+    if(tabBtn){
+      activeMeaningTab = tabBtn.dataset.tab;
+      idbSet('meaningTab_v1', activeMeaningTab);
+      renderedIdx = new Set();
+      renderVisibleRange();
+      return;
+    }
+    const starBtn = e.target.closest('.verse-star');
+    if(starBtn){
+      const idx = Number(starBtn.dataset.idx);
+      const s = screens[idx];
+      const key = padyamKey(s);
+      if(starredMap[key]){
+        delete starredMap[key];
+      } else {
+        starredMap[key] = {
+          parva: s.parva, aswasam: s.aswasam, number: s.number, type: s.type,
+          snippet: (s.text || '').replace(/\n/g, ' ').slice(0, 70)
+        };
+      }
+      saveStarred();
+      starBtn.classList.toggle('on');
+    }
   });
 
-  function saveBookmarks(){
-    try{ localStorage.setItem(STORAGE_KEY_BOOK, JSON.stringify(bookmarks)); }catch(e){}
+  function saveStarred(){ idbSet('starred_v1', starredMap); }
+
+  function findScreenIndexByKey(key){
+    for(let i = 0; i < screens.length; i++){ if(padyamKey(screens[i]) === key) return i; }
+    return -1;
   }
-  function loadBookmarks(){
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY_BOOK);
-      bookmarks = raw ? JSON.parse(raw) : {};
-    }catch(e){ bookmarks = {}; }
-  }
-  function renderBookmarkList(){
-    const keys = Object.keys(bookmarks);
-    bookmarkListEl.innerHTML = '';
-    bookmarkEmpty.classList.toggle('hidden', keys.length > 0);
+
+  function renderStarredList(){
+    const keys = Object.keys(starredMap);
+    starredResults.innerHTML = '';
+    if(keys.length === 0){
+      starredResults.innerHTML = '<div class="search-empty">స్టార్ చేసిన పద్యాలు లేవు</div>';
+      return;
+    }
     keys.forEach(function(key){
-      const bm = bookmarks[key];
-      const li = document.createElement('li');
-      li.innerHTML = '<span>' + escapeHtml(bm.label) + '</span><span class="bm-del" data-key="' + key + '">✕</span>';
-      li.addEventListener('click', function(e){
-        if(e.target.classList.contains('bm-del')){
-          delete bookmarks[key];
-          saveBookmarks();
-          renderBookmarkList();
+      const item = starredMap[key];
+      const div = document.createElement('div');
+      div.className = 'search-item';
+      div.innerHTML =
+        '<div class="si-loc">' + escapeHtml(item.aswasam) + (item.number ? ' · #' + escapeHtml(item.number) : '') + '</div>' +
+        '<div class="si-text">' + escapeHtml(item.snippet) + '</div>' +
+        '<span class="si-del" data-key="' + escapeHtml(key) + '">✕</span>';
+      div.addEventListener('click', function(e){
+        if(e.target.classList.contains('si-del')){
+          delete starredMap[key];
+          saveStarred();
+          renderStarredList();
+          renderedIdx = new Set();
+          renderVisibleRange();
           return;
         }
-        closeDrawer();
-        goTo(bm.idx);
+        closeStarred();
+        const idx = findScreenIndexByKey(key);
+        if(idx !== -1) navigateAway(idx);
       });
-      bookmarkListEl.appendChild(li);
+      starredResults.appendChild(div);
     });
   }
+
+  function openStarred(){
+    closeSearch();
+    starredOverlay.classList.add('show');
+    renderStarredList();
+  }
+  function closeStarred(){ starredOverlay.classList.remove('show'); }
+  $('starredMenuBtn').addEventListener('click', function(){ closeDrawer(); openStarred(); });
+  $('closeStarredBtn').addEventListener('click', closeStarred);
+  $('clearStarredBtn').addEventListener('click', function(){
+    if(!Object.keys(starredMap).length) return;
+    if(!window.confirm('అన్ని స్టార్ చేసిన పద్యాలను తొలగించాలా?')) return;
+    starredMap = {};
+    saveStarred();
+    renderStarredList();
+    renderedIdx = new Set();
+    renderVisibleRange();
+  });
 
   // ------------------------------------------------------------------
   // Drawer (hamburger menu)
@@ -701,11 +1054,16 @@
   function closeDrawer(){ overlay.classList.remove('show'); drawer.classList.remove('show'); }
   $('menuBtn').addEventListener('click', openDrawer);
   $('closeDrawerBtn').addEventListener('click', closeDrawer);
-  overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); });
+  overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); closeStarred(); });
 
   function buildNavTree(){
     // Group screens into parva -> aswasam(by NAME, spans multiple source pages/files) -> topic,
-    // preserving first-seen order.
+    // preserving first-seen order. Also builds the flat topics[] list (one entry
+    // per topic bucket, in the same first-seen order) and padyamToTopicIndex[]
+    // used by topic-wise mode.
+    topics = [];
+    padyamToTopicIndex = new Array(screens.length);
+
     const parvaOrder = [];
     const parvaMap = new Map();
     screens.forEach(function(s, idx){
@@ -729,11 +1087,19 @@
       const topicKey = cleanTopicLabel(s.topic) || '—';
       let tp = asw.topics.get(topicKey);
       if(!tp){
-        tp = { label: topicKey, count:0, firstIdx: idx };
+        const topicIndex = topics.length;
+        tp = { label: topicKey, count:0, firstIdx: idx, topicIndex: topicIndex };
         asw.topics.set(topicKey, tp);
         asw.topicOrder.push(topicKey);
+        topics.push({
+          parva: s.parva, aswasam: aswKey, topicLabel: topicKey,
+          keyStr: s.parva + '|' + aswKey + '|' + topicKey,
+          indices: []
+        });
       }
       tp.count++;
+      topics[tp.topicIndex].indices.push(idx);
+      padyamToTopicIndex[idx] = tp.topicIndex;
     });
 
     navTreeEl.innerHTML = '';
@@ -773,7 +1139,9 @@
             '<span class="nav-count">(' + tp.count + ')</span>';
           li.addEventListener('click', function(){
             closeDrawer();
-            goTo(tp.firstIdx);
+            awayFromPrimary = false; // TOC navigation is "normal" browsing, like prev/next
+            if(viewMode === 'topic') goTo(tp.topicIndex, true);
+            else goTo(tp.firstIdx, true);
           });
           topicList.appendChild(li);
         });
@@ -788,10 +1156,19 @@
   }
 
   function highlightNavTreeCurrent(){
-    const s = screens[currentIndex];
-    if(!s || !navTreeEl.children.length) return;
-    const currentAswasam = s.aswasam || 'ఆశ్వాసము';
-    const currentTopicKey = cleanTopicLabel(s.topic) || '—';
+    if(!navTreeEl.children.length) return;
+    let currentAswasam, currentTopicKey;
+    if(viewMode === 'topic'){
+      const t = topics[currentIndex];
+      if(!t) return;
+      currentAswasam = t.aswasam;
+      currentTopicKey = t.topicLabel;
+    } else {
+      const s = screens[currentIndex];
+      if(!s) return;
+      currentAswasam = s.aswasam || 'ఆశ్వాసము';
+      currentTopicKey = cleanTopicLabel(s.topic) || '—';
+    }
     Array.from(navTreeEl.querySelectorAll('.nav-aswasam')).forEach(function(aswEl){
       const isCurrentAswasam = aswEl.dataset.aswasam === currentAswasam;
       if(isCurrentAswasam) aswEl.open = true;
@@ -802,56 +1179,63 @@
   }
 
   // ------------------------------------------------------------------
-  // Font size controls
+  // Font size + font family controls
   // ------------------------------------------------------------------
   $('fontPlus').addEventListener('click', function(){
     fontScale = Math.min(2, Math.round((fontScale + 0.1) * 10) / 10);
-    applyFontScale(); saveFontScale();
+    applyFontScale(); idbSet('fontScale_v1', fontScale);
   });
   $('fontMinus').addEventListener('click', function(){
     fontScale = Math.max(0.7, Math.round((fontScale - 0.1) * 10) / 10);
-    applyFontScale(); saveFontScale();
+    applyFontScale(); idbSet('fontScale_v1', fontScale);
   });
-  function saveFontScale(){
-    try{ localStorage.setItem(STORAGE_KEY_FONT, String(fontScale)); }catch(e){}
+  function setFontFamily(f){
+    fontFamily = f;
+    applyFontFamily();
+    idbSet('fontFamily_v1', fontFamily);
   }
-  function loadFontScale(){
-    try{
-      const v = localStorage.getItem(STORAGE_KEY_FONT);
-      if(v) fontScale = parseFloat(v) || 1.0;
-    }catch(e){}
-  }
+  $('fontMandaliBtn').addEventListener('click', function(){ setFontFamily('Mandali'); });
+  $('fontNTRBtn').addEventListener('click', function(){ setFontFamily('NTR'); });
 
   // ------------------------------------------------------------------
-  // Search
+  // Search (persistent, padyam-text-only, Telugu Unicode NFC-aware)
   // ------------------------------------------------------------------
+  let searchTerm = '';
+
   function openSearch(){
+    closeStarred();
     searchOverlay.classList.add('show');
-    searchInput.value = '';
-    searchResults.innerHTML = '';
+    searchInput.value = searchTerm;
+    runSearch();
     setTimeout(function(){ searchInput.focus(); }, 260);
   }
   function closeSearch(){ searchOverlay.classList.remove('show'); }
   $('searchBtn').addEventListener('click', openSearch);
   $('closeSearchBtn').addEventListener('click', closeSearch);
+  $('clearSearchBtn').addEventListener('click', function(){
+    searchTerm = '';
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+    searchInput.focus();
+  });
 
   let searchDebounce = null;
   searchInput.addEventListener('input', function(){
+    searchTerm = searchInput.value;
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(runSearch, 150);
   });
 
   function runSearch(){
-    const q = searchInput.value.trim();
+    const q = searchTerm.trim();
     if(q.length < 1){ searchResults.innerHTML = ''; return; }
-    const ql = q.toLowerCase();
+    // Normalize the query the same way padyam text was normalized at load
+    // time, so Telugu vowel-sign/conjunct encoding differences don't cause
+    // false misses. Matches padyam text only (not topic/aswasam/number).
+    const qn = q.normalize('NFC').toLowerCase();
     const matches = [];
     for(let i = 0; i < screens.length && matches.length < 60; i++){
-      const s = screens[i];
-      const hay = (s.text + ' ' + (s.number||'') + ' ' + s.topic + ' ' + s.aswasam).toLowerCase();
-      if(hay.indexOf(ql) !== -1){
-        matches.push(i);
-      }
+      if(screens[i].textNorm.indexOf(qn) !== -1) matches.push(i);
     }
     if(matches.length === 0){
       searchResults.innerHTML = '<div class="search-empty">ఫలితాలు లేవు</div>';
@@ -860,7 +1244,7 @@
     searchResults.innerHTML = '';
     matches.forEach(function(idx){
       const s = screens[idx];
-      const snippet = highlightMatch(s.text.slice(0, 140), q);
+      const snippet = highlightMatch(s.text.replace(/\n/g, ' ').slice(0, 140), qn);
       const div = document.createElement('div');
       div.className = 'search-item';
       div.innerHTML =
@@ -868,24 +1252,23 @@
         '<div class="si-text">' + snippet + '</div>';
       div.addEventListener('click', function(){
         closeSearch();
-        goTo(idx);
+        navigateAway(idx);
       });
       searchResults.appendChild(div);
     });
   }
-  function highlightMatch(text, q){
+  function highlightMatch(text, qn){
     const esc = escapeHtml(text);
-    if(!q) return esc;
-    const idx = esc.toLowerCase().indexOf(q.toLowerCase());
+    if(!qn) return esc;
+    const idx = esc.normalize('NFC').toLowerCase().indexOf(qn);
     if(idx === -1) return esc;
-    return esc.slice(0, idx) + '<mark>' + esc.slice(idx, idx + q.length) + '</mark>' + esc.slice(idx + q.length);
+    return esc.slice(0, idx) + '<mark>' + esc.slice(idx, idx + qn.length) + '</mark>' + esc.slice(idx + qn.length);
   }
 
   // ------------------------------------------------------------------
-  // Resize handle: drag to adjust verse/meaning pane split
+  // Resize handle: drag to adjust verse/meaning pane split (padyam-wise only)
   // ------------------------------------------------------------------
-  // (Kept simple/global rather than per-screen, applies via CSS var.)
-  let resizingActive = false, resizeStartY = 0, startVerseFlex = 55;
+  let resizingActive = false, resizeStartY = 0;
   document.addEventListener('mousedown', handleResizeStart);
   document.addEventListener('touchstart', handleResizeStart, {passive:true});
   function handleResizeStart(e){
@@ -918,22 +1301,28 @@
   // ------------------------------------------------------------------
   // Boot
   // ------------------------------------------------------------------
-  loadFontScale();
-  loadBookmarks();
-  renderBookmarkList();
-  applyFontScale();
-  autoLoadFromServer().then(function(ok){
-    if(ok) return;
-    if(tryRestoreFromCache()) return;
-    loaderStatus.textContent = 'డేటా లోడ్ కాలేదు. ఇంటర్నెట్ కనెక్షన్‌ని తనిఖీ చేయండి.';
-    retryBtn.classList.remove('hidden');
-  });
+  (async function boot(){
+    fontScale = (await idbGet('fontScale_v1')) || 1.0;
+    fontFamily = (await idbGet('fontFamily_v1')) || 'Mandali';
+    activeMeaningTab = (await idbGet('meaningTab_v1')) || 'bhava';
+    applyFontScale();
+    applyFontFamily();
 
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('sw.js').catch(function(){ /* offline support unavailable; app still works online */ });
-    });
-  }
+    const ok = await autoLoadFromServer();
+    if(!ok){
+      const cacheOk = await tryRestoreFromCache();
+      if(!cacheOk){
+        loaderStatus.textContent = 'డేటా లోడ్ కాలేదు. ఇంటర్నెట్ కనెక్షన్‌ని తనిఖీ చేయండి.';
+        retryBtn.classList.remove('hidden');
+      }
+    }
+
+    if('serviceWorker' in navigator){
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('sw.js').catch(function(){ /* offline support unavailable; app still works online */ });
+      });
+    }
+  })();
 
   window.addEventListener('resize', function(){ goTo(currentIndex, false); });
 })();
