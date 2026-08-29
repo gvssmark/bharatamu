@@ -721,6 +721,7 @@
     div.className = 'screen';
     div.innerHTML =
       '<div class="verse-pane">' +
+        '<div class="topic-hdr">' + escapeHtml(cleanTopicLabel(s.topic) || '—') + '</div>' +
         '<div class="verse-meta">' +
           (s.number ? '<span class="verse-badge">#' + escapeHtml(s.number) + '</span>' : '') +
           '<span class="verse-type">' + escapeHtml(s.type || '') + '</span>' +
@@ -756,7 +757,7 @@
     div.className = 'screen topic-screen';
     div.innerHTML =
       '<div class="topic-scroll">' +
-        '<div class="topic-hdr">' + escapeHtml(t.aswasam) + (t.topicLabel ? ' · ' + escapeHtml(t.topicLabel) : '') + '</div>' +
+        '<div class="topic-hdr">' + escapeHtml(t.topicLabel || '—') + '</div>' +
         blocksHtml +
       '</div>';
     return div;
@@ -804,11 +805,11 @@
     if(viewMode === 'topic'){
       const t = topics[currentIndex];
       if(!t) return;
-      hdrSub.textContent = t.aswasam + (t.topicLabel ? ' · ' + t.topicLabel : '');
+      hdrSub.textContent = t.parva + ' · ' + t.aswasam;
     } else {
       const s = screens[currentIndex];
       if(!s) return;
-      hdrSub.textContent = s.aswasam + (s.topic ? ' · ' + s.topic : '');
+      hdrSub.textContent = s.parva + ' · ' + s.aswasam;
     }
   }
 
@@ -841,11 +842,29 @@
   function goTo(idx, animate){
     const count = activeCount();
     if(idx < 0 || idx >= count) return;
+    const changed = idx !== currentIndex;
     currentIndex = idx;
+
+    if(changed && viewMode === 'padyam' && activeMeaningTab !== 'bhava'){
+      // Each padyam you navigate to defaults back to the bhava tab; a
+      // per-padyam tab choice only sticks while you stay on that padyam.
+      activeMeaningTab = 'bhava';
+      renderedIdx = new Set();
+    }
+
     renderVisibleRange();
     const x = -idx * 100;
     track.style.transition = animate === false ? 'none' : 'transform 0.28s ease';
     track.style.transform = 'translateX(' + x + '%)';
+
+    const el = track.children[idx];
+    if(el && changed){
+      Array.prototype.forEach.call(
+        el.querySelectorAll('.verse-pane, .meaning-pane, .meaning-content, .topic-scroll'),
+        function(node){ node.scrollTop = 0; }
+      );
+    }
+
     updateHeader();
     updateProgress();
 
@@ -967,7 +986,6 @@
     const tabBtn = e.target.closest('.meaning-tab-btn');
     if(tabBtn){
       activeMeaningTab = tabBtn.dataset.tab;
-      idbSet('meaningTab_v1', activeMeaningTab);
       renderedIdx = new Set();
       renderVisibleRange();
       return;
@@ -981,7 +999,7 @@
         delete starredMap[key];
       } else {
         starredMap[key] = {
-          parva: s.parva, aswasam: s.aswasam, number: s.number, type: s.type,
+          parva: s.parva, aswasam: s.aswasam, topic: cleanTopicLabel(s.topic), number: s.number, type: s.type,
           snippet: (s.text || '').replace(/\n/g, ' ').slice(0, 70)
         };
       }
@@ -1009,7 +1027,7 @@
       const div = document.createElement('div');
       div.className = 'search-item';
       div.innerHTML =
-        '<div class="si-loc">' + escapeHtml(item.aswasam) + (item.number ? ' · #' + escapeHtml(item.number) : '') + '</div>' +
+        '<div class="si-loc">' + escapeHtml(item.parva || '') + '#' + escapeHtml(item.aswasam || '') + '#' + escapeHtml(item.topic || '') + '#' + escapeHtml(item.number || '') + '</div>' +
         '<div class="si-text">' + escapeHtml(item.snippet) + '</div>' +
         '<span class="si-del" data-key="' + escapeHtml(key) + '">✕</span>';
       div.addEventListener('click', function(e){
@@ -1248,7 +1266,7 @@
       const div = document.createElement('div');
       div.className = 'search-item';
       div.innerHTML =
-        '<div class="si-loc">' + escapeHtml(s.aswasam) + (s.number ? ' · #' + escapeHtml(s.number) : '') + '</div>' +
+        '<div class="si-loc">' + escapeHtml(s.parva) + '#' + escapeHtml(s.aswasam) + '#' + escapeHtml(cleanTopicLabel(s.topic)) + '#' + escapeHtml(s.number || '') + '</div>' +
         '<div class="si-text">' + snippet + '</div>';
       div.addEventListener('click', function(){
         closeSearch();
@@ -1304,7 +1322,7 @@
   (async function boot(){
     fontScale = (await idbGet('fontScale_v1')) || 1.0;
     fontFamily = (await idbGet('fontFamily_v1')) || 'Mandali';
-    activeMeaningTab = (await idbGet('meaningTab_v1')) || 'bhava';
+    activeMeaningTab = 'bhava';
     applyFontScale();
     applyFontFamily();
 
