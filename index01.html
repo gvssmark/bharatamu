@@ -648,42 +648,6 @@
     return true;
   }
 
-  // TEMP DIAGNOSTIC — remove once the ardha/bhava/visesha rollout is confirmed
-  // and dataupdatedOn.js has been bumped. Logs, per parva, how many rows have
-  // a non-empty ardha (అర్థం) value: once in the currently cached IndexedDB
-  // copy, and once in the data freshly loaded from GitHub just now — so you
-  // can hard-refresh, check the console, and only then update dataupdatedOn.js.
-  function countArdhaByParva(rows){
-    const counts = {};
-    if(!Array.isArray(rows)) return counts;
-    rows.forEach(function(r){
-      const parva = normalizeWs(r[0]);
-      if(!counts[parva]) counts[parva] = { total: 0, withArdha: 0 };
-      counts[parva].total++;
-      if(r[6] && String(r[6]).trim()) counts[parva].withArdha++;
-    });
-    return counts;
-  }
-  function logArdhaDiagnostic(cachedRows, githubRows){
-    const cachedCounts = countArdhaByParva(cachedRows);
-    const githubCounts = countArdhaByParva(githubRows);
-    const parvaOrder = [];
-    const seen = {};
-    githubRows && githubRows.forEach(function(r){
-      const p = normalizeWs(r[0]);
-      if(!seen[p]){ seen[p] = true; parvaOrder.push(p); }
-    });
-    Object.keys(cachedCounts).forEach(function(p){
-      if(!seen[p]){ seen[p] = true; parvaOrder.push(p); }
-    });
-    console.log('%c[ardha diagnostic] IndexedDB (cached) vs GitHub (just loaded) — అర్థం-populated / total, per parva', 'font-weight:bold');
-    parvaOrder.forEach(function(p){
-      const c = cachedCounts[p] || { total: 0, withArdha: 0 };
-      const g = githubCounts[p] || { total: 0, withArdha: 0 };
-      console.log(p + ':  IndexedDB ' + c.withArdha + '/' + c.total + '   GitHub ' + g.withArdha + '/' + g.total);
-    });
-  }
-
   async function autoLoadFromServer(){
     // "padyams" is built just above from all available datafiles/*.js files
     // (each declares a top-level "var <Name>" which attaches to window, so
@@ -692,8 +656,6 @@
       const newDate = (typeof dataUpdatedOn !== 'undefined') ? dataUpdatedOn : null;
       try{
         const cachedDate = await idbGet('dataUpdatedOn_v1');
-        const cachedRows = await idbGet('data_v2'); // read BEFORE any overwrite below, for the diagnostic
-        logArdhaDiagnostic(cachedRows, padyams); // TEMP — see comment above
         if(!newDate || newDate !== cachedDate){
           // Data has changed (or we can't tell) — refresh the IndexedDB backup.
           await idbSet('data_v2', padyams);
