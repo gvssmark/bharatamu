@@ -245,16 +245,6 @@
     font-weight:bold; color:var(--rust-dark); margin-bottom:14px; font-size:1rem;
     border-bottom:2px dashed var(--line); padding-bottom:8px;
   }
-  .topic-hdr-row{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    margin-bottom:14px; border-bottom:2px dashed var(--line); padding-bottom:8px;
-  }
-  .topic-hdr-row .topic-hdr{ margin:0; border:none; padding:0; flex:1; min-width:0; }
-  .topic-star{
-    flex:0 0 auto; background:none; border:none; font-size:1.3rem; cursor:pointer;
-    color: var(--gold); opacity:0.4;
-  }
-  .topic-star.on{ opacity:1; }
   .topic-block + .topic-block{ margin-top:22px; padding-top:18px; border-top:1px solid var(--line); }
 
   /* ---------- Bottom nav ---------- */
@@ -274,12 +264,12 @@
   #progress b{ color:#f2e3c5; }
 
   /* ---------- Search / Starred overlays (shared shell) ---------- */
-  #searchOverlay, #starredOverlay, #starredTopicsOverlay{
+  #searchOverlay, #starredOverlay{
     position:fixed; inset:0; background: var(--bg); z-index:40;
     display:flex; flex-direction:column;
     transform: translateY(-100%); transition: transform 0.25s ease;
   }
-  #searchOverlay.show, #starredOverlay.show, #starredTopicsOverlay.show{ transform: translateY(0); }
+  #searchOverlay.show, #starredOverlay.show{ transform: translateY(0); }
   .search-hdr{
     flex:0 0 auto; display:flex; align-items:center; gap:8px;
     padding: calc(14px + env(safe-area-inset-top)) 12px 14px; background: var(--rust-dark);
@@ -294,7 +284,6 @@
     font-size:0.78rem; padding:7px 11px; border-radius:6px; cursor:pointer;
     white-space:nowrap; font-family:inherit; flex:0 0 auto;
   }
-  .hdr-mini-btn:disabled{ opacity:0.35; cursor:default; }
   .search-results{ flex:1; overflow-y:auto; background: var(--paper); padding: 6px 0; }
   .search-item{ position:relative; padding: 12px 44px 12px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
   .search-item:active{ background: var(--paper-soft); }
@@ -384,12 +373,11 @@
       </div>
     </div>
     <div class="drawer-section">
-      <button class="drawer-btn" id="starredMenuBtn">⭐ స్టార్ చేసిన పద్యాలు</button>
-      <button class="drawer-btn" id="starredTopicsMenuBtn">⭐ స్టార్ చేసిన విషయాలు</button>
-    </div>
-    <div class="drawer-section">
       <h4>విషయసూచిక</h4>
       <div class="nav-tree" id="navTree"></div>
+    </div>
+    <div class="drawer-section">
+      <button class="drawer-btn" id="starredMenuBtn">⭐ స్టార్ చేసిన పద్యాలు</button>
     </div>
   </div>
 </div>
@@ -407,20 +395,9 @@
   <div class="search-hdr">
     <button class="icon-btn" id="closeStarredBtn">✕</button>
     <div class="hdr-title-mini">స్టార్ చేసిన పద్యాలు</div>
-    <button class="hdr-mini-btn" id="readAllStarredBtn">▶ అన్నీ చదవండి</button>
     <button class="hdr-mini-btn" id="clearStarredBtn">అన్నీ తొలగించండి</button>
   </div>
   <div class="search-results" id="starredResults"></div>
-</div>
-
-<div id="starredTopicsOverlay">
-  <div class="search-hdr">
-    <button class="icon-btn" id="closeStarredTopicsBtn">✕</button>
-    <div class="hdr-title-mini">స్టార్ చేసిన విషయాలు</div>
-    <button class="hdr-mini-btn" id="readAllStarredTopicsBtn">▶ అన్నీ చదవండి</button>
-    <button class="hdr-mini-btn" id="clearStarredTopicsBtn">అన్నీ తొలగించండి</button>
-  </div>
-  <div class="search-results" id="starredTopicsResults"></div>
 </div>
 
 <div id="loaderScreen">
@@ -527,29 +504,19 @@
   let rawData = [];         // parsed rows as produced by the datafiles
   let screens = [];         // flattened list of {parva, aswasam, topic, number, type, parts, text, textNorm, ardha, bhava, visesha}
   let topics = [];          // list of {parva, aswasam, topicLabel, keyStr, indices:[padyamIdx,...]}
+  let padyamToTopicIndex = []; // padyamIdx -> topicIdx
 
   let viewMode = 'padyam';  // 'padyam' | 'topic'
   let currentIndex = 0;     // index into screens[] (padyam mode) or topics[] (topic mode)
   let fontScale = 1.0;
   let fontFamily = 'Mandali'; // 'Mandali' | 'NTR'
   let activeMeaningTab = 'bhava'; // 'ardha' | 'bhava' | 'visesha'
-  let starredMap = {};        // padyamKey -> {parva, aswasam, topic, number, type, snippet}
-  let starredTopicsMap = {};  // topicKeyStr -> {parva, aswasam, topic, count}
+  let starredMap = {};      // padyamKey -> {parva, aswasam, number, type, snippet}
 
-  // Padyam-wise and topic-wise each keep their OWN primary bookmark — they are
-  // never mingled or cross-mapped. "lastViewMode" remembers which of the two
-  // you were last normally reading in, so re-opening the app (or tapping
-  // "back to primary bookmark" from an excursion) resumes the right one.
-  let primaryPadyamKey = null;
-  let primaryTopicKey = null;
-  let lastViewMode = 'padyam';
+  // "Primary bookmark" = the position normal browsing (prev/next/swipe/TOC)
+  // last left off at. It doubles as the resume-on-reopen position.
+  let primary = { mode: 'padyam', key: null };
   let awayFromPrimary = false; // true after jumping in via search/starred results
-
-  // "Read All" (starred padyams / starred topics): a bounded sequence you
-  // step through with prev/next/swipe instead of the whole book. Follows the
-  // same away-from-primary-bookmark banner/rules as any other excursion.
-  let readAllQueue = null;  // array of absolute indices, or null when inactive
-  let readAllPos = 0;
 
   let touchStartX = 0, touchStartY = 0, dragging = false, dragDX = 0;
   let renderedIdx = new Set();
@@ -573,8 +540,6 @@
   const searchResults = $('searchResults');
   const starredOverlay = $('starredOverlay');
   const starredResults = $('starredResults');
-  const starredTopicsOverlay = $('starredTopicsOverlay');
-  const starredTopicsResults = $('starredTopicsResults');
   const loaderScreen = $('loaderScreen');
   const loaderStatus = $('loaderStatus');
   const retryBtn = $('retryBtn');
@@ -658,28 +623,24 @@
       return false;
     }
     loaderScreen.classList.add('hidden');
-    buildNavTree(); // also builds topics[]
+    buildNavTree(); // also builds topics[] / padyamToTopicIndex[]
 
     starredMap = (await idbGet('starred_v1')) || {};
-    starredTopicsMap = (await idbGet('starredTopics_v1')) || {};
-    primaryPadyamKey = (await idbGet('primaryPadyam_v1')) || null;
-    primaryTopicKey = (await idbGet('primaryTopic_v1')) || null;
-    lastViewMode = (await idbGet('lastViewMode_v1')) || 'padyam';
-    viewMode = lastViewMode;
+    const savedPrimary = await idbGet('primary_v1');
+    if(savedPrimary && savedPrimary.key && (savedPrimary.mode === 'padyam' || savedPrimary.mode === 'topic')){
+      primary = savedPrimary;
+    }
 
-    const myKey = viewMode === 'padyam' ? primaryPadyamKey : primaryTopicKey;
-    if(myKey){
-      currentIndex = resolveIndexForKey(viewMode, myKey);
+    if(primary.key){
+      viewMode = primary.mode;
+      currentIndex = resolvePrimaryIndex();
     } else {
+      viewMode = 'padyam';
       currentIndex = 0;
-      const freshKey = currentKeyForIndex(viewMode, currentIndex);
-      if(viewMode === 'padyam'){ primaryPadyamKey = freshKey; idbSet('primaryPadyam_v1', freshKey); }
-      else { primaryTopicKey = freshKey; idbSet('primaryTopic_v1', freshKey); }
-      idbSet('lastViewMode_v1', viewMode);
+      primary = { mode: viewMode, key: currentKeyForIndex(viewMode, currentIndex) };
+      idbSet('primary_v1', primary);
     }
     awayFromPrimary = false;
-    readAllQueue = null;
-    readAllPos = 0;
     updateModeToggleUI();
 
     renderTrack();
@@ -830,15 +791,11 @@
       '</div>';
     }).join('');
 
-    const topicStarred = !!starredTopicsMap[t.keyStr];
     const div = document.createElement('div');
     div.className = 'screen topic-screen';
     div.innerHTML =
       '<div class="topic-scroll">' +
-        '<div class="topic-hdr-row">' +
-          '<div class="topic-hdr">' + escapeHtml(t.topicLabel || '—') + '</div>' +
-          '<button class="topic-star ' + (topicStarred ? 'on' : '') + '" data-topic-idx="' + idx + '">★</button>' +
-        '</div>' +
+        '<div class="topic-hdr">' + escapeHtml(t.topicLabel || '—') + '</div>' +
         blocksHtml +
       '</div>';
     return div;
@@ -895,12 +852,6 @@
   }
 
   function updateProgress(){
-    if(readAllQueue){
-      progressEl.innerHTML = '<b>' + (readAllPos + 1) + '</b> / ' + readAllQueue.length + ' ⭐';
-      prevBtn.disabled = readAllPos === 0;
-      nextBtn.disabled = readAllPos === readAllQueue.length - 1;
-      return;
-    }
     const count = activeCount();
     progressEl.innerHTML = '<b>' + (currentIndex + 1) + '</b> / ' + count;
     prevBtn.disabled = currentIndex === 0;
@@ -914,19 +865,13 @@
   // ------------------------------------------------------------------
   // Primary bookmark
   // ------------------------------------------------------------------
-  function resolveIndexForKey(mode, key){
-    if(!key) return 0;
-    if(mode === 'topic'){
-      for(let i = 0; i < topics.length; i++){ if(topics[i].keyStr === key) return i; }
+  function resolvePrimaryIndex(){
+    if(primary.mode === 'topic'){
+      for(let i = 0; i < topics.length; i++){ if(topics[i].keyStr === primary.key) return i; }
     } else {
-      for(let i = 0; i < screens.length; i++){ if(padyamKey(screens[i]) === key) return i; }
+      for(let i = 0; i < screens.length; i++){ if(padyamKey(screens[i]) === primary.key) return i; }
     }
     return 0; // data changed since this was saved — fall back to the start
-  }
-
-  function exitReadAll(){
-    readAllQueue = null;
-    readAllPos = 0;
   }
 
   // ------------------------------------------------------------------
@@ -961,47 +906,22 @@
     updateHeader();
     updateProgress();
 
-    const myKey = currentKeyForIndex(viewMode, idx);
     if(!awayFromPrimary){
-      // Normal browsing (prev/next/swipe/TOC): this becomes the new primary
-      // bookmark for WHICHEVER mode we're in — padyam-wise and topic-wise
-      // bookmarks are kept fully separate, never mingled.
-      if(viewMode === 'padyam'){ primaryPadyamKey = myKey; idbSet('primaryPadyam_v1', myKey); }
-      else { primaryTopicKey = myKey; idbSet('primaryTopic_v1', myKey); }
-      lastViewMode = viewMode;
-      idbSet('lastViewMode_v1', viewMode);
-    } else {
-      const myPrimary = viewMode === 'padyam' ? primaryPadyamKey : primaryTopicKey;
-      if(myKey === myPrimary){
-        // Swiped/navigated back to exactly this mode's primary bookmark — end the excursion.
-        awayFromPrimary = false;
-        exitReadAll();
-      }
+      // Normal browsing (prev/next/swipe/TOC): this becomes the new primary bookmark.
+      primary = { mode: viewMode, key: currentKeyForIndex(viewMode, idx) };
+      idbSet('primary_v1', primary);
+    } else if(viewMode === primary.mode && currentKeyForIndex(viewMode, idx) === primary.key){
+      // Swiped/navigated back to exactly the primary bookmark — end the excursion.
+      awayFromPrimary = false;
     }
     updateAwayBanner();
     highlightNavTreeCurrent();
   }
 
-  // Step by one position, honoring an active "Read All" queue if present.
-  // Returns the target absolute index, or null if already at a boundary.
-  function stepTarget(delta){
-    if(readAllQueue){
-      const newPos = readAllPos + delta;
-      if(newPos < 0 || newPos >= readAllQueue.length) return null;
-      readAllPos = newPos;
-      return readAllQueue[newPos];
-    }
-    const t = currentIndex + delta;
-    if(t < 0 || t >= activeCount()) return null;
-    return t;
-  }
-
-  // Used by search results / single starred-item taps: always lands in
-  // padyam-wise mode, and starts (or continues) an excursion that leaves the
-  // primary bookmark untouched until the user explicitly returns to it (or
-  // swipes back onto it). Cancels any in-progress "Read All" sequence.
+  // Used by search results / starred items: always lands in padyam-wise mode,
+  // and starts (or continues) an excursion that leaves the primary bookmark
+  // untouched until the user explicitly returns to it (or swipes back onto it).
   function navigateAway(padyamIdx){
-    exitReadAll();
     if(viewMode !== 'padyam'){
       viewMode = 'padyam';
       renderTrack();
@@ -1010,27 +930,13 @@
     goTo(padyamIdx, true);
   }
 
-  // Same as navigateAway, but for a single starred topic (lands in topic-wise mode).
-  function navigateAwayTopic(topicIdx){
-    exitReadAll();
-    if(viewMode !== 'topic'){
-      viewMode = 'topic';
-      renderTrack();
-    }
-    awayFromPrimary = true;
-    goTo(topicIdx, true);
-  }
-
   function goToPrimary(){
-    exitReadAll();
-    const targetMode = lastViewMode;
-    if(viewMode !== targetMode){
-      viewMode = targetMode;
+    if(viewMode !== primary.mode){
+      viewMode = primary.mode;
       renderTrack();
     }
     awayFromPrimary = false;
-    const key = targetMode === 'padyam' ? primaryPadyamKey : primaryTopicKey;
-    goTo(resolveIndexForKey(targetMode, key), true);
+    goTo(resolvePrimaryIndex(), true);
     updateModeToggleUI();
   }
   $('goPrimaryBtn').addEventListener('click', goToPrimary);
@@ -1044,14 +950,18 @@
   }
   function setViewMode(mode){
     if(mode === viewMode) return;
-    exitReadAll();
-    awayFromPrimary = false; // a deliberate mode switch resumes normal browsing in that mode
-    viewMode = mode;
-    renderTrack();
-    // Each mode resumes at its OWN primary bookmark — never a position
-    // translated/mapped over from the other mode.
-    const key = mode === 'padyam' ? primaryPadyamKey : primaryTopicKey;
-    goTo(resolveIndexForKey(mode, key), false);
+    if(mode === 'topic'){
+      const topicIdx = padyamToTopicIndex[currentIndex] != null ? padyamToTopicIndex[currentIndex] : 0;
+      viewMode = 'topic';
+      renderTrack();
+      goTo(topicIdx, false);
+    } else {
+      const t = topics[currentIndex];
+      const padIdx = (t && t.indices.length) ? t.indices[0] : 0;
+      viewMode = 'padyam';
+      renderTrack();
+      goTo(padIdx, false);
+    }
     updateModeToggleUI();
   }
   $('modePadyamBtn').addEventListener('click', function(){ setViewMode('padyam'); });
@@ -1060,12 +970,12 @@
   // ------------------------------------------------------------------
   // Nav buttons + keyboard
   // ------------------------------------------------------------------
-  prevBtn.addEventListener('click', function(){ const t = stepTarget(-1); if(t !== null) goTo(t); });
-  nextBtn.addEventListener('click', function(){ const t = stepTarget(1); if(t !== null) goTo(t); });
+  prevBtn.addEventListener('click', function(){ goTo(currentIndex - 1); });
+  nextBtn.addEventListener('click', function(){ goTo(currentIndex + 1); });
   document.addEventListener('keydown', function(e){
-    if(e.key === 'ArrowLeft'){ const t = stepTarget(-1); if(t !== null) goTo(t); }
-    if(e.key === 'ArrowRight'){ const t = stepTarget(1); if(t !== null) goTo(t); }
-    if(e.key === 'Escape'){ closeDrawer(); closeSearch(); closeStarred(); closeStarredTopics(); }
+    if(e.key === 'ArrowLeft') goTo(currentIndex - 1);
+    if(e.key === 'ArrowRight') goTo(currentIndex + 1);
+    if(e.key === 'Escape'){ closeDrawer(); closeSearch(); closeStarred(); }
   });
 
   // ------------------------------------------------------------------
@@ -1095,13 +1005,12 @@
   stage.addEventListener('touchend', function(){
     if(!dragging) return;
     dragging = false;
+    const count = activeCount();
     const threshold = stage.clientWidth * 0.18;
-    if(dragDX > threshold){
-      const t = stepTarget(-1);
-      goTo(t !== null ? t : currentIndex, true);
-    } else if(dragDX < -threshold){
-      const t = stepTarget(1);
-      goTo(t !== null ? t : currentIndex, true);
+    if(dragDX > threshold && currentIndex > 0){
+      goTo(currentIndex - 1);
+    } else if(dragDX < -threshold && currentIndex < count - 1){
+      goTo(currentIndex + 1);
     } else {
       goTo(currentIndex, true);
     }
@@ -1117,22 +1026,6 @@
       activeMeaningTab = tabBtn.dataset.tab;
       renderedIdx = new Set();
       renderVisibleRange();
-      return;
-    }
-    const topicStarBtn = e.target.closest('.topic-star');
-    if(topicStarBtn){
-      const tIdx = Number(topicStarBtn.dataset.topicIdx);
-      const t = topics[tIdx];
-      const key = t.keyStr;
-      if(starredTopicsMap[key]){
-        delete starredTopicsMap[key];
-      } else {
-        starredTopicsMap[key] = {
-          parva: t.parva, aswasam: t.aswasam, topic: t.topicLabel, count: t.indices.length
-        };
-      }
-      saveStarredTopics();
-      topicStarBtn.classList.toggle('on');
       return;
     }
     const starBtn = e.target.closest('.verse-star');
@@ -1163,7 +1056,6 @@
   function renderStarredList(){
     const keys = Object.keys(starredMap);
     starredResults.innerHTML = '';
-    $('readAllStarredBtn').disabled = keys.length === 0;
     if(keys.length === 0){
       starredResults.innerHTML = '<div class="search-empty">స్టార్ చేసిన పద్యాలు లేవు</div>';
       return;
@@ -1195,7 +1087,6 @@
 
   function openStarred(){
     closeSearch();
-    closeStarredTopics();
     starredOverlay.classList.add('show');
     renderStarredList();
   }
@@ -1211,94 +1102,6 @@
     renderedIdx = new Set();
     renderVisibleRange();
   });
-  $('readAllStarredBtn').addEventListener('click', function(){
-    const keys = Object.keys(starredMap);
-    if(!keys.length) return;
-    const indices = keys.map(findScreenIndexByKey).filter(function(i){ return i !== -1; }).sort(function(a, b){ return a - b; });
-    if(!indices.length) return;
-    closeStarred();
-    exitReadAll();
-    if(viewMode !== 'padyam'){ viewMode = 'padyam'; renderTrack(); }
-    readAllQueue = indices;
-    readAllPos = 0;
-    awayFromPrimary = true;
-    goTo(indices[0], true);
-  });
-
-  // ------------------------------------------------------------------
-  // Starred topics (parallel to starred padyams above)
-  // ------------------------------------------------------------------
-  function saveStarredTopics(){ idbSet('starredTopics_v1', starredTopicsMap); }
-
-  function findTopicIndexByKey(key){
-    for(let i = 0; i < topics.length; i++){ if(topics[i].keyStr === key) return i; }
-    return -1;
-  }
-
-  function renderStarredTopicsList(){
-    const keys = Object.keys(starredTopicsMap);
-    starredTopicsResults.innerHTML = '';
-    $('readAllStarredTopicsBtn').disabled = keys.length === 0;
-    if(keys.length === 0){
-      starredTopicsResults.innerHTML = '<div class="search-empty">స్టార్ చేసిన విషయాలు లేవు</div>';
-      return;
-    }
-    keys.forEach(function(key){
-      const item = starredTopicsMap[key];
-      const div = document.createElement('div');
-      div.className = 'search-item';
-      div.innerHTML =
-        '<div class="si-loc">' + escapeHtml(item.parva || '') + '#' + escapeHtml(item.aswasam || '') + '#' + escapeHtml(item.topic || '') + '</div>' +
-        '<div class="si-text">' + escapeHtml(item.count || 0) + ' పద్యాలు</div>' +
-        '<span class="si-del" data-key="' + escapeHtml(key) + '">✕</span>';
-      div.addEventListener('click', function(e){
-        if(e.target.classList.contains('si-del')){
-          delete starredTopicsMap[key];
-          saveStarredTopics();
-          renderStarredTopicsList();
-          renderedIdx = new Set();
-          renderVisibleRange();
-          return;
-        }
-        closeStarredTopics();
-        const idx = findTopicIndexByKey(key);
-        if(idx !== -1) navigateAwayTopic(idx);
-      });
-      starredTopicsResults.appendChild(div);
-    });
-  }
-
-  function openStarredTopics(){
-    closeSearch();
-    closeStarred();
-    starredTopicsOverlay.classList.add('show');
-    renderStarredTopicsList();
-  }
-  function closeStarredTopics(){ starredTopicsOverlay.classList.remove('show'); }
-  $('starredTopicsMenuBtn').addEventListener('click', function(){ closeDrawer(); openStarredTopics(); });
-  $('closeStarredTopicsBtn').addEventListener('click', closeStarredTopics);
-  $('clearStarredTopicsBtn').addEventListener('click', function(){
-    if(!Object.keys(starredTopicsMap).length) return;
-    if(!window.confirm('అన్ని స్టార్ చేసిన విషయాలను తొలగించాలా?')) return;
-    starredTopicsMap = {};
-    saveStarredTopics();
-    renderStarredTopicsList();
-    renderedIdx = new Set();
-    renderVisibleRange();
-  });
-  $('readAllStarredTopicsBtn').addEventListener('click', function(){
-    const keys = Object.keys(starredTopicsMap);
-    if(!keys.length) return;
-    const indices = keys.map(findTopicIndexByKey).filter(function(i){ return i !== -1; }).sort(function(a, b){ return a - b; });
-    if(!indices.length) return;
-    closeStarredTopics();
-    exitReadAll();
-    if(viewMode !== 'topic'){ viewMode = 'topic'; renderTrack(); }
-    readAllQueue = indices;
-    readAllPos = 0;
-    awayFromPrimary = true;
-    goTo(indices[0], true);
-  });
 
   // ------------------------------------------------------------------
   // Drawer (hamburger menu)
@@ -1307,13 +1110,15 @@
   function closeDrawer(){ overlay.classList.remove('show'); drawer.classList.remove('show'); }
   $('menuBtn').addEventListener('click', openDrawer);
   $('closeDrawerBtn').addEventListener('click', closeDrawer);
-  overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); closeStarred(); closeStarredTopics(); });
+  overlay.addEventListener('click', function(){ closeDrawer(); closeSearch(); closeStarred(); });
 
   function buildNavTree(){
     // Group screens into parva -> aswasam(by NAME, spans multiple source pages/files) -> topic,
     // preserving first-seen order. Also builds the flat topics[] list (one entry
-    // per topic bucket, in the same first-seen order).
+    // per topic bucket, in the same first-seen order) and padyamToTopicIndex[]
+    // used by topic-wise mode.
     topics = [];
+    padyamToTopicIndex = new Array(screens.length);
 
     const parvaOrder = [];
     const parvaMap = new Map();
@@ -1350,6 +1155,7 @@
       }
       tp.count++;
       topics[tp.topicIndex].indices.push(idx);
+      padyamToTopicIndex[idx] = tp.topicIndex;
     });
 
     navTreeEl.innerHTML = '';
@@ -1389,7 +1195,6 @@
             '<span class="nav-count">(' + tp.count + ')</span>';
           li.addEventListener('click', function(){
             closeDrawer();
-            exitReadAll();
             awayFromPrimary = false; // TOC navigation is "normal" browsing, like prev/next
             if(viewMode === 'topic') goTo(tp.topicIndex, true);
             else goTo(tp.firstIdx, true);
