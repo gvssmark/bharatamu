@@ -33,7 +33,7 @@ const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   [
-    "fileInput", "saveButton", "csvButton", "clearEditsButton", "clearDbButton",
+    "fileInput", "saveButton", "csvButton", "clearEditsButton",
     "fileInfo", "saveStatus", "saveText", "pageSize", "searchInput",
     "prevPage", "nextPage", "pageInfo", "message", "dataTable",
     "headerRow", "tableBody"
@@ -43,7 +43,6 @@ document.addEventListener("DOMContentLoaded", () => {
   els.saveButton.addEventListener("click", exportJs);
   els.csvButton.addEventListener("click", exportCsv);
   els.clearEditsButton.addEventListener("click", clearSavedEdits);
-  els.clearDbButton.addEventListener("click", clearEntireIndexedDb);
   els.pageSize.addEventListener("change", () => {
     state.pageSize = Number(els.pageSize.value);
     state.page = 1;
@@ -407,32 +406,6 @@ async function clearSavedEdits() {
   render();
 }
 
-async function clearEntireIndexedDb() {
-  if (!confirm(
-    "This will permanently delete ALL saved edits from this editor, for every JS file.\n\n"+
-    "Your original JS files are not affected.\n\nContinue?"
-  )) return;
-
-  try {
-    const db=await openDb();
-    await new Promise((resolve,reject)=>{
-      const tx=db.transaction(["files","cells"],"readwrite");
-      tx.objectStore("files").clear();
-      tx.objectStore("cells").clear();
-      tx.oncomplete=resolve;
-      tx.onerror=()=>reject(tx.error);
-      tx.onabort=()=>reject(tx.error || new Error("Clear transaction aborted"));
-    });
-    for (const row of state.rows) { row[6]=row[7]=row[8]=""; }
-    setStatus("saved","IndexedDB cleared");
-    render();
-  } catch(error) {
-    console.error(error);
-    setStatus("error","Could not clear IndexedDB");
-    alert("Could not clear IndexedDB.\n\n"+error.message);
-  }
-}
-
 function queueCellSave(row, col, value, inputElement) {
   setStatus("busy", "Saving...");
 
@@ -455,104 +428,13 @@ function queueCellSave(row, col, value, inputElement) {
 function renderHeaders() {
   els.headerRow.innerHTML = "";
 
-  // A <colgroup> makes the width belong to the entire column, like Excel
-  // and Google Sheets, rather than changing only the header cell.
-  let colgroup = els.dataTable.querySelector("colgroup");
-  if (!colgroup) {
-    colgroup = document.createElement("colgroup");
-    els.dataTable.insertBefore(colgroup, els.dataTable.firstChild);
-  }
-  colgroup.innerHTML = "";
-
   const headings = ["#", ...ORIGINAL_COLUMNS, ...EXTRA_COLUMNS];
   headings.forEach((name, index) => {
-    const col = document.createElement("col");
-    col.dataset.col = index;
-    colgroup.appendChild(col);
-
     const th = document.createElement("th");
-    th.className = "resizable";
-    th.dataset.col = index;
     th.textContent = name;
     if (index === 0) th.title = "Source row number";
-
-    const handle = document.createElement("span");
-    handle.className = "resize-handle";
-    handle.title = "Drag column boundary to resize";
-    handle.addEventListener("mousedown", startColumnResize);
-    th.appendChild(handle);
     els.headerRow.appendChild(th);
   });
-
-  restoreColumnWidths();
-}
-
-/* ---------- Excel / Google Sheets style column resizing ---------- */
-
-const COLUMN_WIDTH_KEY = "jsArrayTableEditor.columnWidths.v2";
-let resizeState = null;
-
-function getColumnWidths() {
-  try { return JSON.parse(localStorage.getItem(COLUMN_WIDTH_KEY) || "{}"); }
-  catch (_) { return {}; }
-}
-
-function getColumnElement(index) {
-  return els.dataTable.querySelector(`colgroup col[data-col="${index}"]`);
-}
-
-function restoreColumnWidths() {
-  const widths = getColumnWidths();
-  const defaults = [55, 90, 80, 220, 110, 120, 500, 190, 190, 190];
-  for (let i=0; i<10; i++) {
-    const col=getColumnElement(i);
-    if (!col) continue;
-    const width=Math.max(60, Number(widths[i] || defaults[i]));
-    col.style.width=`${width}px`;
-  }
-}
-
-function saveColumnWidth(index,width) {
-  const widths=getColumnWidths();
-  widths[index]=Math.max(60,Math.round(width));
-  localStorage.setItem(COLUMN_WIDTH_KEY,JSON.stringify(widths));
-}
-
-function startColumnResize(event) {
-  event.preventDefault();
-  event.stopPropagation();
-  const handle=event.currentTarget;
-  const th=handle.parentElement;
-  const col=getColumnElement(Number(th.dataset.col));
-  if (!col) return;
-
-  resizeState={
-    index:Number(th.dataset.col),
-    col,
-    handle,
-    startX:event.clientX,
-    startWidth:th.getBoundingClientRect().width
-  };
-  handle.classList.add("dragging");
-  document.body.classList.add("resizing");
-  document.addEventListener("mousemove",onColumnResize);
-  document.addEventListener("mouseup",stopColumnResize);
-}
-
-function onColumnResize(event) {
-  if (!resizeState) return;
-  const width=Math.max(60,resizeState.startWidth + event.clientX-resizeState.startX);
-  resizeState.col.style.width=`${width}px`;
-}
-
-function stopColumnResize() {
-  if (!resizeState) return;
-  saveColumnWidth(resizeState.index,resizeState.col.getBoundingClientRect().width);
-  resizeState.handle.classList.remove("dragging");
-  document.body.classList.remove("resizing");
-  document.removeEventListener("mousemove",onColumnResize);
-  document.removeEventListener("mouseup",stopColumnResize);
-  resizeState=null;
 }
 
 function matches(row, query) {
@@ -671,13 +553,10 @@ function exportJs() {
 // Original source: ${state.fileName}
 // Original fields: 6
 // Added fields: ${EXTRA_COLUMNS.join(", ")}
-const ${state.variableName} = [
+var ${state.variableName} = [
 ${body}
 ];
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = ${state.variableName};
-}
 `;
 
   const base = state.fileName.replace(/\.[^.]+$/, "") || "array";
