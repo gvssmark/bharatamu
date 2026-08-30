@@ -223,3 +223,11 @@ footer {
   .topbar, .toolbar { flex-direction: column; align-items: stretch; }
   .table-wrap { max-height: calc(100vh - 280px); }
 }
+
+
+/* Excel / Google Sheets style column resizing */
+#dataTable { table-layout: fixed; }
+#dataTable th.resizable { position: sticky; top: 0; overflow: visible; }
+#dataTable .resize-handle { position: absolute; top: 0; right: -5px; width: 10px; height: 100%; cursor: col-resize; z-index: 20; }
+#dataTable .resize-handle:hover, #dataTable .resize-handle.dragging { background: rgba(31,111,235,.25); }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
