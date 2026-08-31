@@ -1,4 +1,4 @@
-AdiTest = [
+Adi = [
   [
     "Source Row",
     "Parva",
