@@ -64,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.page < pages) { state.page++; render(); }
   });
 
+  populateColumnSelector();
   updateButtons(false);
 });
 
@@ -429,49 +430,50 @@ function queueCellSave(row, col, value, inputElement) {
 
 /* ---------- Table rendering ---------- */
 
-function populateColumnSelector(){
-  els.anyColumnSelect.innerHTML='<option value="">Select column...</option>';
-  ORIGINAL_COLUMNS.forEach((name,index)=>{const o=document.createElement("option");o.value=String(index);o.textContent=name;els.anyColumnSelect.appendChild(o);});
-  els.anyColumnSelect.disabled=false; els.anyColumnToggle.disabled=true; state.selectedEditColumn=null; state.anyColumnEditEnabled=false;
-  els.anyColumnToggle.textContent="OFF"; els.anyColumnToggle.className="edit-toggle off";
-}
-function onAnyColumnSelected(){state.selectedEditColumn=els.anyColumnSelect.value===""?null:Number(els.anyColumnSelect.value);state.anyColumnEditEnabled=false;els.anyColumnToggle.disabled=state.selectedEditColumn===null;els.anyColumnToggle.textContent="OFF";els.anyColumnToggle.className="edit-toggle off";render();}
-function toggleAnyColumnEditing(){if(state.selectedEditColumn===null)return;state.anyColumnEditEnabled=!state.anyColumnEditEnabled;els.anyColumnToggle.textContent=state.anyColumnEditEnabled?"ON":"OFF";els.anyColumnToggle.className="edit-toggle "+(state.anyColumnEditEnabled?"on":"off");render();}
-function isColumnEditable(col){return (col>=6&&col<=8)||(state.anyColumnEditEnabled&&state.selectedEditColumn===col);}
-
-function renderHeaders() {
-  els.headerRow.innerHTML = "";
-
-  let colgroup = els.dataTable.querySelector("colgroup");
-  if (!colgroup) {
-    colgroup = document.createElement("colgroup");
-    els.dataTable.insertBefore(colgroup, els.dataTable.firstChild);
-  }
-  colgroup.innerHTML = "";
-
-  const headings = ["#", ...ORIGINAL_COLUMNS, ...EXTRA_COLUMNS];
-  const widths = getColumnWidths();
-  const defaults = [55, 90, 80, 220, 110, 120, 500, 190, 190, 190];
-
-  headings.forEach((name, index) => {
-    const col = document.createElement("col");
-    col.dataset.col = index;
-    col.style.width = `${Math.max(60, Number(widths[index] || defaults[index]))}px`;
-    colgroup.appendChild(col);
-
-    const th = document.createElement("th");
-    th.className = "resizable";
-    th.dataset.col = index;
-    th.textContent = name;
-    if (index === 0) th.title = "Source row number";
-    if (index < 6 && isColumnEditable(index)) { th.classList.add("protected-edit"); th.title="EDIT MODE ON — original column is editable"; }
-
-    const handle = document.createElement("span");
-    handle.className = "resize-handle";
-    handle.addEventListener("mousedown", startColumnResize);
-    th.appendChild(handle);
-    els.headerRow.appendChild(th);
+function populateColumnSelector() {
+  els.anyColumnSelect.innerHTML = '<option value="">Select column...</option>';
+  ORIGINAL_COLUMNS.forEach((name, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = name;
+    els.anyColumnSelect.appendChild(option);
   });
+  els.anyColumnSelect.disabled = false;
+  els.anyColumnToggle.disabled = true;
+  els.anyColumnToggle.textContent = "OFF";
+  els.anyColumnToggle.className = "edit-toggle off";
+  state.selectedEditColumn = null;
+  state.anyColumnEditEnabled = false;
+}
+
+function onAnyColumnSelected() {
+  state.selectedEditColumn = els.anyColumnSelect.value === ""
+    ? null : Number(els.anyColumnSelect.value);
+  state.anyColumnEditEnabled = false;
+  els.anyColumnToggle.disabled = state.selectedEditColumn === null || !state.rows.length;
+  els.anyColumnToggle.textContent = "OFF";
+  els.anyColumnToggle.className = "edit-toggle off";
+  if (state.rows.length) render();
+}
+
+function toggleAnyColumnEditing() {
+  if (state.selectedEditColumn === null) return;
+  if (!state.rows.length) {
+    alert("Please open a .js array file first.");
+    return;
+  }
+  state.anyColumnEditEnabled = !state.anyColumnEditEnabled;
+  els.anyColumnToggle.textContent = state.anyColumnEditEnabled ? "ON" : "OFF";
+  els.anyColumnToggle.className = "edit-toggle " +
+    (state.anyColumnEditEnabled ? "on" : "off");
+  render();
+}
+
+function isColumnEditable(col) {
+  // Input 1, Input 2 and Input 3 are always editable.
+  if (col >= 6 && col <= 8) return true;
+  // Original columns require explicit selection and ON state.
+  return state.anyColumnEditEnabled && state.selectedEditColumn === col;
 }
 
 const COLUMN_WIDTH_KEY = "jsArrayTableEditor.columnWidths.v3";
