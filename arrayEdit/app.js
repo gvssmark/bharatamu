@@ -524,6 +524,52 @@ function finishColumnResize() {
   resizeState = null;
 }
 
+function renderHeaders() {
+  els.headerRow.innerHTML = "";
+
+  // One <col> controls the width of every cell in that column, giving
+  // spreadsheet-style resizing rather than resizing only the heading.
+  let colgroup = els.dataTable.querySelector("colgroup");
+  if (!colgroup) {
+    colgroup = document.createElement("colgroup");
+    els.dataTable.insertBefore(colgroup, els.dataTable.firstChild);
+  }
+  colgroup.innerHTML = "";
+
+  const headings = ["#", ...ORIGINAL_COLUMNS, ...EXTRA_COLUMNS];
+  const defaults = [55, 90, 80, 220, 110, 120, 500, 190, 190, 190];
+  const widths = getColumnWidths();
+
+  headings.forEach((name, index) => {
+    const col = document.createElement("col");
+    col.dataset.col = String(index);
+    const width = Math.max(60, Number(widths[index] || defaults[index] || 150));
+    col.style.width = `${width}px`;
+    colgroup.appendChild(col);
+
+    const th = document.createElement("th");
+    th.className = "resizable";
+    th.dataset.col = String(index);
+    th.textContent = name;
+
+    if (index === 0) {
+      th.title = "Source row number";
+    } else if (isColumnEditable(index - 1)) {
+      th.classList.add("protected-edit");
+      th.title = index - 1 < 6
+        ? "EDIT MODE ON — this original column is editable"
+        : "Input column — always editable";
+    }
+
+    const handle = document.createElement("span");
+    handle.className = "resize-handle";
+    handle.title = "Drag column boundary to resize";
+    handle.addEventListener("mousedown", startColumnResize);
+    th.appendChild(handle);
+    els.headerRow.appendChild(th);
+  });
+}
+
 function matches(row, query) {
   if (!query) return true;
   return row.some(value =>
