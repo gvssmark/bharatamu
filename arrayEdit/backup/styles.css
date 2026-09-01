@@ -231,6 +231,3 @@ footer {
 #dataTable .resize-handle { position: absolute; top: 0; right: -5px; width: 10px; height: 100%; cursor: col-resize; z-index: 20; }
 #dataTable .resize-handle:hover, #dataTable .resize-handle.dragging { background: rgba(31,111,235,.25); }
 body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
-
-
-.edit-divider{width:1px;height:28px;background:#cfd6e0;margin:0 4px}.edit-control{display:inline-flex;align-items:center;gap:5px;font-size:12px}.edit-control select{max-width:170px}.edit-toggle{min-width:52px;font-weight:700}.edit-toggle.on{background:#198754;border-color:#198754;color:white}.edit-toggle.off{background:#f1f3f5}th.protected-edit{background:#fff0c2!important}td.protected-edit{background:#fffdf0}

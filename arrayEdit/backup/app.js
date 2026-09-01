@@ -26,14 +26,14 @@ let state = {
   page: 1,
   pageSize: 50,
   search: "",
-  originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
+  originalText: ""
 };
 
 const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   [
-    "fileInput", "saveButton", "csvButton", "clearEditsButton", "clearDbButton", "anyColumnSelect", "anyColumnToggle",
+    "fileInput", "saveButton", "csvButton", "clearEditsButton", "clearDbButton",
     "fileInfo", "saveStatus", "saveText", "pageSize", "searchInput",
     "prevPage", "nextPage", "pageInfo", "message", "dataTable",
     "headerRow", "tableBody"
@@ -44,8 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
   els.csvButton.addEventListener("click", exportCsv);
   els.clearEditsButton.addEventListener("click", clearSavedEdits);
   els.clearDbButton.addEventListener("click", clearEntireIndexedDb);
-  els.anyColumnSelect.addEventListener("change", onAnyColumnSelected);
-  els.anyColumnToggle.addEventListener("click", toggleAnyColumnEditing);
   els.pageSize.addEventListener("change", () => {
     state.pageSize = Number(els.pageSize.value);
     state.page = 1;
@@ -112,7 +110,6 @@ async function onFileSelected(event) {
       "If the computer loses power, reopening the same source file restores the saved edits.";
 
     updateButtons(true);
-    populateColumnSelector();
     render();
 
     // Ask the browser for persistent storage where supported.
@@ -429,16 +426,6 @@ function queueCellSave(row, col, value, inputElement) {
 
 /* ---------- Table rendering ---------- */
 
-function populateColumnSelector(){
-  els.anyColumnSelect.innerHTML='<option value="">Select column...</option>';
-  ORIGINAL_COLUMNS.forEach((name,index)=>{const o=document.createElement("option");o.value=String(index);o.textContent=name;els.anyColumnSelect.appendChild(o);});
-  els.anyColumnSelect.disabled=false; els.anyColumnToggle.disabled=true; state.selectedEditColumn=null; state.anyColumnEditEnabled=false;
-  els.anyColumnToggle.textContent="OFF"; els.anyColumnToggle.className="edit-toggle off";
-}
-function onAnyColumnSelected(){state.selectedEditColumn=els.anyColumnSelect.value===""?null:Number(els.anyColumnSelect.value);state.anyColumnEditEnabled=false;els.anyColumnToggle.disabled=state.selectedEditColumn===null;els.anyColumnToggle.textContent="OFF";els.anyColumnToggle.className="edit-toggle off";render();}
-function toggleAnyColumnEditing(){if(state.selectedEditColumn===null)return;state.anyColumnEditEnabled=!state.anyColumnEditEnabled;els.anyColumnToggle.textContent=state.anyColumnEditEnabled?"ON":"OFF";els.anyColumnToggle.className="edit-toggle "+(state.anyColumnEditEnabled?"on":"off");render();}
-function isColumnEditable(col){return (col>=6&&col<=8)||(state.anyColumnEditEnabled&&state.selectedEditColumn===col);}
-
 function renderHeaders() {
   els.headerRow.innerHTML = "";
 
@@ -464,7 +451,6 @@ function renderHeaders() {
     th.dataset.col = index;
     th.textContent = name;
     if (index === 0) th.title = "Source row number";
-    if (index < 6 && isColumnEditable(index)) { th.classList.add("protected-edit"); th.title="EDIT MODE ON — original column is editable"; }
 
     const handle = document.createElement("span");
     handle.className = "resize-handle";
@@ -570,8 +556,11 @@ function render() {
     for (let col = 0; col < 9; col++) {
       const td = document.createElement("td");
 
-      if (isColumnEditable(col)) {
-        td.className = "editable" + (col < 6 ? " protected-edit" : "");
+      if (col < 6) {
+        td.className = "original";
+        td.textContent = String(row[col] ?? "");
+      } else {
+        td.className = "editable";
         const input = document.createElement("textarea");
         input.rows = 2;
         input.value = String(row[col] ?? "");
@@ -585,9 +574,6 @@ function render() {
         });
 
         td.appendChild(input);
-      } else {
-        td.className = "original";
-        td.textContent = String(row[col] ?? "");
       }
 
       tr.appendChild(td);
@@ -607,7 +593,7 @@ function resetState() {
   state = {
     fileName: "", fileKey: "", variableName: "padyamData", rows: [],
     filteredIndexes: [], page: 1, pageSize: Number(els.pageSize.value),
-    search: "", originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
+    search: "", originalText: ""
   };
   updateButtons(false);
   els.dataTable.hidden = true;
