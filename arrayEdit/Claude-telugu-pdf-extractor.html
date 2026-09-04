@@ -320,6 +320,10 @@
       <input type="checkbox" id="cleanupToggle" checked>
       Clean up stray bracket artifacts (recommended — fixes a common OCR misread of ప్ర/వ్ర/శ్ర/గ్ర-type conjuncts as "(" or "[")
     </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--ink-soft);">
+      <input type="checkbox" id="reflowToggle" checked>
+      Join wrapped lines into flowing paragraphs (keeps blank-line breaks between paragraphs)
+    </label>
     <p class="note">First run downloads a one-time Telugu OCR language model (~15 MB) and caches it. Each page takes roughly 3–8 seconds depending on your device — for an 883-page book, extract in batches (e.g. 20–50 pages at a time) rather than all at once. Start with a small range to check quality before committing to the whole book. OCR is not perfect, especially on dense conjunct clusters — proofread important passages.</p>
     <div class="status-line" id="statusLine"></div>
   </div>
@@ -404,6 +408,23 @@ function cleanupTeluguOcr(text){
     return para;
   });
   return cleaned.join('\n\n');
+}
+
+// Joins hard-wrapped lines back into flowing paragraphs. A blank line (\n\n)
+// is treated as a real paragraph break and kept; single line breaks inside a
+// paragraph are just where the PDF's page width happened to wrap, so they
+// get collapsed to a space.
+function reflowParagraphs(text){
+  return text.split(/\n{2,}/).map(para =>
+    para.split('\n').map(l => l.trim()).filter(l => l.length).join(' ').trim()
+  ).join('\n\n');
+}
+
+function getDisplayText(raw){
+  let t = raw;
+  if (document.getElementById('cleanupToggle').checked) t = cleanupTeluguOcr(t);
+  if (document.getElementById('reflowToggle').checked) t = reflowParagraphs(t);
+  return t;
 }
 
 const dropzone = document.getElementById('dropzone');
@@ -534,7 +555,7 @@ async function runExtraction(){
       const { data } = await w.recognize(canvas);
       const text = (data && data.text ? data.text : '').trim();
       pageResults[p] = text;
-      addPageBlock(p, document.getElementById('cleanupToggle').checked ? cleanupTeluguOcr(text) : text);
+      addPageBlock(p, getDisplayText(text));
 
       progressBar.style.width = Math.round(((p - start + 1) / (end - start + 1)) * 100) + '%';
     }
@@ -582,15 +603,16 @@ function addPageBlock(pageNum, text){
   document.getElementById('pagetext-' + pageNum).innerText = text || '(no text recognized on this page)';
 }
 
-document.getElementById('cleanupToggle').addEventListener('change', (e) => {
-  const on = e.target.checked;
+function rerenderAllPages(){
   Object.keys(pageResults).forEach(p => {
     const el = document.getElementById('pagetext-' + p);
     if (!el) return;
     const raw = pageResults[p];
-    el.innerText = on ? cleanupTeluguOcr(raw) : (raw || '(no text recognized on this page)');
+    el.innerText = raw ? getDisplayText(raw) : '(no text recognized on this page)';
   });
-});
+}
+document.getElementById('cleanupToggle').addEventListener('change', rerenderAllPages);
+document.getElementById('reflowToggle').addEventListener('change', rerenderAllPages);
 
 document.getElementById('downloadTxt').addEventListener('click', () => {
   const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
