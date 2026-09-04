@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF / Image → Text Extractor</title>
+
+<!-- OCR -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+
+<!-- PDF rendering / text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+:root {
+  --bg:#0f172a;
+  --panel:#1e293b;
+  --panel-light:#273449;
+  --accent:#6366f1;
+  --accent-hover:#4f46e5;
+  --text:#e2e8f0;
+  --text-dim:#94a3b8;
+  --border:#334155;
+  --success:#22c55e;
+  --error:#ef4444;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; min-height:100vh;
+  background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:32px 16px;
+}
+.container { width:100%; max-width:900px; margin:auto; }
+header { text-align:center; margin-bottom:28px; }
+header h1 { font-size:1.6rem; margin:0 0 6px; }
+header p { color:var(--text-dim); margin:0; font-size:.95rem; }
+.card {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:14px; padding:22px; margin-bottom:20px;
+}
+.controls-row {
+  display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;
+}
+.lang-select {
+  display:flex; align-items:center; gap:8px;
+  background:var(--panel-light); border:1px solid var(--border);
+  border-radius:8px; padding:8px 12px;
+}
+.lang-select label { font-size:.85rem; color:var(--text-dim); }
+select {
+  background:transparent; color:var(--text); border:none;
+  font-size:.9rem; outline:none;
+}
+select option { background:var(--panel-light); color:var(--text); }
+.lang-hint { font-size:.78rem; color:var(--text-dim); margin:-8px 0 16px 4px; }
+
+.dropzone {
+  border:2px dashed var(--border); border-radius:12px;
+  padding:36px 20px; text-align:center; cursor:pointer;
+  transition:border-color .2s,background .2s; position:relative;
+}
+.dropzone:hover,.dropzone.dragover {
+  border-color:var(--accent); background:rgba(99,102,241,.06);
+}
+.dropzone input[type=file] {
+  position:absolute; inset:0; opacity:0; cursor:pointer;
+}
+.dropzone-icon { font-size:2.2rem; margin-bottom:8px; }
+.dropzone-text { font-size:.95rem; margin-bottom:4px; }
+.dropzone-sub { font-size:.8rem; color:var(--text-dim); }
+
+.file-info {
+  display:none; margin-top:16px; padding:12px;
+  background:var(--panel-light); border-radius:8px;
+  font-size:.85rem; color:var(--text-dim);
+}
+.file-info.active { display:block; }
+
+.btn-row {
+  display:flex; gap:10px; justify-content:center;
+  flex-wrap:wrap; margin-top:16px;
+}
+button {
+  background:var(--accent); color:white; border:none;
+  padding:10px 20px; border-radius:8px; font-size:.9rem;
+  font-weight:600; cursor:pointer;
+}
+button:hover:not(:disabled) { background:var(--accent-hover); }
+button:disabled { opacity:.5; cursor:not-allowed; }
+button.secondary {
+  background:var(--panel-light); border:1px solid var(--border);
+  color:var(--text);
+}
+button.secondary:hover:not(:disabled) { background:#334155; }
+
+.progress-wrap { margin-top:18px; display:none; }
+.progress-wrap.active { display:block; }
+.progress-label {
+  font-size:.85rem; color:var(--text-dim); margin-bottom:8px;
+  display:flex; justify-content:space-between; gap:10px;
+}
+.progress-bar-bg {
+  height:8px; background:var(--panel-light);
+  border-radius:999px; overflow:hidden;
+}
+.progress-bar-fill {
+  height:100%; background:linear-gradient(90deg,var(--accent),#818cf8);
+  width:0%; transition:width .25s ease;
+}
+
+.status-msg { font-size:.85rem; margin-top:10px; text-align:center; }
+.status-msg.error { color:var(--error); }
+.status-msg.success { color:var(--success); }
+
+.result-card { display:none; }
+.result-card.active { display:block; }
+.result-header {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:12px; flex-wrap:wrap; gap:8px;
+}
+.result-header h2 { font-size:1rem; margin:0; }
+.result-actions { display:flex; gap:8px; }
+.result-actions button { padding:6px 14px; font-size:.8rem; }
+
+textarea {
+  width:100%; min-height:360px;
+  background:var(--panel-light); color:var(--text);
+  border:1px solid var(--border); border-radius:10px;
+  padding:14px; font-size:1rem; line-height:1.6;
+  resize:vertical;
+  font-family:"Noto Sans Telugu",-apple-system,BlinkMacSystemFont,
+              "Segoe UI",Roboto,sans-serif;
+}
+.char-count {
+  text-align:right; font-size:.75rem;
+  color:var(--text-dim); margin-top:6px;
+}
+footer {
+  text-align:center; color:var(--text-dim);
+  font-size:.75rem; margin-top:24px;
+}
+@font-face {
+  font-family:"Noto Sans Telugu";
+  src:local("Noto Sans Telugu");
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<header>
+  <h1>📄 PDF / Image → Text Extractor</h1>
+  <p>Upload a PDF or image and extract English, Telugu or Hindi text. Extract text from PDF or image files.</p>
+</header>
+
+<div class="card">
+
+  <div class="controls-row">
+    <div class="lang-select">
+      <label for="langSelect">OCR Language:</label>
+      <select id="langSelect">
+        <option value="eng">English</option>
+        <option value="tel">Telugu (తెలుగు)</option>
+        <option value="hin">Hindi (हिन्दी)</option>
+        <option value="eng+tel">English + Telugu</option>
+        <option value="eng+hin">English + Hindi</option>
+        <option value="tel+hin">Telugu + Hindi</option>
+        <option value="eng+tel+hin" selected>English + Telugu + Hindi</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="lang-hint">
+    For normal text PDFs, the text layer is extracted directly. For scanned/image PDFs, OCR is used automatically.
+    Telugu OCR cleanup is also applied to remove certain false "(" characters before dictionary-style words.
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,image/*">
+    <div class="dropzone-icon">📤</div>
+    <div class="dropzone-text">Click to upload, drag & drop, or paste an image</div>
+    <div class="dropzone-sub">PDF, PNG, JPG and WEBP supported</div>
+  </div>
+
+  <div class="file-info" id="fileInfo"></div>
+
+  <div class="btn-row">
+    <button id="extractBtn" disabled>Extract Text</button>
+    <button id="clearBtn" class="secondary">Clear</button>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressStage">Preparing...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+</div>
+
+<div class="card result-card" id="resultCard">
+  <div class="result-header">
+    <h2>Extracted Text</h2>
+    <div class="result-actions">
+      <button id="copyBtn" class="secondary">📋 Copy</button>
+      <button id="downloadBtn" class="secondary">⬇ Download TXT</button>
+    </div>
+  </div>
+
+  <textarea id="resultText" placeholder="Extracted text will appear here..."></textarea>
+  <div class="char-count" id="charCount">0 characters</div>
+</div>
+
+<footer>
+  PDF processing and OCR happen in your browser. Files are not uploaded to a server by this page.
+</footer>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const dropzone      = document.getElementById("dropzone");
+const fileInput     = document.getElementById("fileInput");
+const fileInfo      = document.getElementById("fileInfo");
+const extractBtn    = document.getElementById("extractBtn");
+const clearBtn      = document.getElementById("clearBtn");
+const langSelect    = document.getElementById("langSelect");
+const progressWrap  = document.getElementById("progressWrap");
+const progressStage = document.getElementById("progressStage");
+const progressPct   = document.getElementById("progressPct");
+const progressFill  = document.getElementById("progressFill");
+const statusMsg     = document.getElementById("statusMsg");
+const resultCard    = document.getElementById("resultCard");
+const resultText    = document.getElementById("resultText");
+const charCount     = document.getElementById("charCount");
+const copyBtn       = document.getElementById("copyBtn");
+const downloadBtn   = document.getElementById("downloadBtn");
+
+let selectedFile = null;
+
+dropzone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropzone.classList.add("dragover");
+});
+
+dropzone.addEventListener("dragleave", () => {
+  dropzone.classList.remove("dragover");
+});
+
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropzone.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+fileInput.addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
+
+document.addEventListener("paste", e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) {
+        handleFile(file);
+        showStatus("Image pasted from clipboard.", "success");
+      }
+      break;
+    }
+  }
+});
+
+function handleFile(file) {
+  const isPDF =
+    file.type === "application/pdf" ||
+    file.name.toLowerCase().endsWith(".pdf");
+
+  const isImage = file.type.startsWith("image/");
+
+  if (!isPDF && !isImage) {
+    showStatus("Please select a PDF or valid image file.", "error");
+    return;
+  }
+
+  selectedFile = file;
+  extractBtn.disabled = false;
+  resultCard.classList.remove("active");
+
+  const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+  fileInfo.innerHTML =
+    "<strong>Selected:</strong> " +
+    escapeHtml(file.name) +
+    " &nbsp; | &nbsp; " +
+    (isPDF ? "PDF document" : "Image") +
+    " &nbsp; | &nbsp; " +
+    sizeMB + " MB";
+
+  fileInfo.classList.add("active");
+  showStatus("", "");
+}
+
+clearBtn.addEventListener("click", () => {
+  selectedFile = null;
+  fileInput.value = "";
+  extractBtn.disabled = true;
+  fileInfo.classList.remove("active");
+  resultCard.classList.remove("active");
+  progressWrap.classList.remove("active");
+  resultText.value = "";
+  charCount.textContent = "0 characters";
+  showStatus("", "");
+});
+
+extractBtn.addEventListener("click", async () => {
+  if (!selectedFile) {
+    showStatus("Please upload a PDF or image first.", "error");
+    return;
+  }
+
+  extractBtn.disabled = true;
+  clearBtn.disabled = true;
+  progressWrap.classList.add("active");
+  resultCard.classList.remove("active");
+  resultText.value = "";
+  progressFill.style.width = "0%";
+  progressPct.textContent = "0%";
+  showStatus("", "");
+
+  try {
+    let finalText = "";
+
+    if (isPDF(selectedFile)) {
+      finalText = await extractPDF(selectedFile);
+    } else {
+      finalText = await extractImage(selectedFile);
+    }
+
+    finalText = finalText.trim();
+
+    resultText.value = finalText || "(No text detected)";
+    charCount.textContent = finalText.length + " characters";
+    resultCard.classList.add("active");
+
+    if (finalText) {
+      showStatus("Text extracted successfully.", "success");
+    } else {
+      showStatus("No text was detected.", "error");
+    }
+
+  } catch (err) {
+    console.error(err);
+    showStatus("Extraction failed: " + (err.message || err), "error");
+  } finally {
+    extractBtn.disabled = false;
+    clearBtn.disabled = false;
+    progressWrap.classList.remove("active");
+  }
+});
+
+/* ---------- PDF ---------- */
+
+async function extractPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+
+  progressStage.textContent = "Opening PDF...";
+  setProgress(2);
+
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const totalPages = pdf.numPages;
+
+  let pages = [];
+
+  for (let pageNo = 1; pageNo <= totalPages; pageNo++) {
+    const percent = Math.round(((pageNo - 1) / totalPages) * 100);
+    progressStage.textContent =
+      "Reading page " + pageNo + " of " + totalPages + "...";
+    setProgress(Math.max(3, percent));
+
+    const page = await pdf.getPage(pageNo);
+
+    /*
+      First try the PDF's own text layer. This is much faster and
+      gives better results for digitally-created PDFs.
+    */
+    const textContent = await page.getTextContent();
+
+    let text = textContent.items
+      .map(item => item.str)
+      .join(" ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/ {2,}/g, " ")
+      .trim();
+
+    /*
+      If the page has little/no selectable text, render it and use OCR.
+      This handles scanned PDFs.
+    */
+    if (text.length < 10) {
+      progressStage.textContent =
+        "OCR page " + pageNo + " of " + totalPages + "...";
+
+      text = await ocrPDFPage(page, pageNo, totalPages);
+    }
+
+    pages.push(text || "(No text detected on this page)");
+
+    setProgress(Math.round((pageNo / totalPages) * 100));
+  }
+
+  progressStage.textContent = "Completed";
+  setProgress(100);
+
+  return pages.join("\n\n");
+}
+
+async function ocrPDFPage(page, pageNo, totalPages) {
+  const scale = 2.2;
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+
+  await page.render({
+    canvasContext: context,
+    viewport: viewport
+  }).promise;
+
+  const result = await Tesseract.recognize(
+    canvas,
+    langSelect.value,
+    {
+      logger: info => {
+        if (info.status) {
+          progressStage.textContent =
+            "OCR page " + pageNo + " of " + totalPages +
+            ": " + formatStage(info.status);
+        }
+      }
+    }
+  );
+
+  canvas.width = 1;
+  canvas.height = 1;
+
+  return cleanOCRText((result.data.text || "").trim());
+}
+
+/* ---------- Image ---------- */
+
+async function extractImage(file) {
+  progressStage.textContent = "Recognizing image text...";
+  setProgress(10);
+
+  const result = await Tesseract.recognize(
+    file,
+    langSelect.value,
+    {
+      logger: info => {
+        if (info.status) progressStage.textContent = formatStage(info.status);
+        if (typeof info.progress === "number") {
+          setProgress(Math.round(info.progress * 100));
+        }
+      }
+    }
+  );
+
+  /*
+    Images are treated as one page, so the same page header is used.
+  */
+  return cleanOCRText((result.data.text || "").trim());
+}
+
+
+/* ---------- Telugu OCR cleanup ---------- */
+
+/*
+  Tesseract sometimes produces an unwanted "(" immediately before
+  a Telugu dictionary/headword expression.  We remove only the
+  suspicious opening bracket when the Telugu text that follows
+  reaches an "=" within the same line.
+
+  Examples:
+      (త్రిమ్మరుచున్‌= తిరుగుతూ
+  becomes:
+       త్రిమ్మరుచున్‌= తిరుగుతూ
+
+  Genuine explanatory brackets such as:
+      (ప్రతిపదార్థం:
+      (ఊహింపబడిన)
+  are retained.
+*/
+function cleanOCRText(text) {
+
+  // Normalize Unicode first. This is important for Telugu combining marks.
+  text = text.normalize("NFC");
+
+  // Remove OCR-generated "(" only when it starts a Telugu expression
+  // that contains "=" on the same line.
+  text = text.replace(
+    /\((?=[\u0C00-\u0C7F][^\r\n=]{0,100}=)/g,
+    ""
+  );
+
+  // A second common OCR variation: the unwanted bracket can be separated
+  // from the Telugu word by a small amount of whitespace.
+  text = text.replace(
+    /\(\s+(?=[\u0C00-\u0C7F][^\r\n=]{0,100}=)/g,
+    ""
+  );
+
+  return text;
+}
+
+/* ---------- Formatting ---------- */
+
+/*
+  A TXT file has no physical "top-right corner".
+  Therefore "Page N" is right-aligned using spaces in a fixed-width
+  text layout. It appears at the top of every extracted page section.
+*/
+function makePageHeader(pageNo) {
+  const label = "Page " + pageNo;
+  const width = 80;
+  return " ".repeat(Math.max(0, width - label.length)) + label;
+}
+
+function setProgress(value) {
+  value = Math.max(0, Math.min(100, value));
+  progressFill.style.width = value + "%";
+  progressPct.textContent = value + "%";
+}
+
+function formatStage(status) {
+  const map = {
+    "loading tesseract core": "Loading OCR engine...",
+    "initializing tesseract": "Initializing...",
+    "loading language traineddata": "Loading language data...",
+    "initializing api": "Initializing API...",
+    "recognizing text": "Recognizing text..."
+  };
+  return map[status] || status;
+}
+
+function isPDF(file) {
+  return file.type === "application/pdf" ||
+         file.name.toLowerCase().endsWith(".pdf");
+}
+
+function showStatus(msg, type) {
+  statusMsg.textContent = msg;
+  statusMsg.className = "status-msg " + (type || "");
+}
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, ch => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;",
+    '"':"&quot;", "'":"&#039;"
+  }[ch]));
+}
+
+/* ---------- Result actions ---------- */
+
+resultText.addEventListener("input", () => {
+  charCount.textContent = resultText.value.length + " characters";
+});
+
+copyBtn.addEventListener("click", async () => {
+  try {
+    // Remove line breaks before copying and replace them with spaces.
+    const textForCopy = resultText.value
+      .replace(/\r?\n/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .trim();
+
+    await navigator.clipboard.writeText(textForCopy);
+
+    const original = copyBtn.textContent;
+    copyBtn.textContent = "✅ Copied";
+    setTimeout(() => copyBtn.textContent = original, 1500);
+  } catch (err) {
+    showStatus("Could not copy text.", "error");
+  }
+});
+
+downloadBtn.addEventListener("click", () => {
+  const blob = new Blob(
+    ["\uFEFF" + resultText.value],
+    { type:"text/plain;charset=utf-8" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  const baseName = selectedFile
+    ? selectedFile.name.replace(/\.[^.]+$/, "")
+    : "extracted-text";
+
+  a.href = url;
+  a.download = baseName + "-extracted.txt";
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
