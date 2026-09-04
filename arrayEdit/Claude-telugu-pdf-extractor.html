@@ -324,6 +324,10 @@
       <input type="checkbox" id="reflowToggle" checked>
       Join wrapped lines into flowing paragraphs (keeps blank-line breaks between paragraphs)
     </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--ink-soft);">
+      <input type="checkbox" id="sectionToggle" checked>
+      Start ప్రతిపదార్థం: / తాత్పర్యం: / విశేషం: as new paragraphs
+    </label>
     <p class="note">First run downloads a one-time Telugu OCR language model (~15 MB) and caches it. Each page takes roughly 3–8 seconds depending on your device — for an 883-page book, extract in batches (e.g. 20–50 pages at a time) rather than all at once. Start with a small range to check quality before committing to the whole book. OCR is not perfect, especially on dense conjunct clusters — proofread important passages.</p>
     <div class="status-line" id="statusLine"></div>
   </div>
@@ -424,7 +428,27 @@ function getDisplayText(raw){
   let t = raw;
   if (document.getElementById('cleanupToggle').checked) t = cleanupTeluguOcr(t);
   if (document.getElementById('reflowToggle').checked) t = reflowParagraphs(t);
+  if (document.getElementById('sectionToggle').checked) t = splitAnnotationSections(t);
   return t;
+}
+
+// ప్రతిపదార్థం: / తాత్పర్యం: (also OCR'd as తాత్సర్యం:) / విశేషం: normally each
+// start their own paragraph in the source, but the reflow step above (or the
+// OCR itself) can merge them into one run-on paragraph when there's no blank
+// line between them on the page. This forces each of these markers to begin
+// a fresh paragraph, without duplicating a break that's already there.
+function splitAnnotationSections(text){
+  const markers = ['ప్రతిపదార్థం:', 'తాత్పర్యం:', 'తాత్సర్యం:', 'విశేషం:'];
+  let result = text;
+  markers.forEach(m => {
+    result = result.replace(new RegExp(m, 'g'), (match, offset, str) => {
+      if (offset === 0) return match;
+      const before = str.slice(0, offset);
+      if (/\n\s*\n\s*$/.test(before)) return match; // already a paragraph break
+      return '\n\n' + match;
+    });
+  });
+  return result.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
 }
 
 const dropzone = document.getElementById('dropzone');
@@ -613,6 +637,7 @@ function rerenderAllPages(){
 }
 document.getElementById('cleanupToggle').addEventListener('change', rerenderAllPages);
 document.getElementById('reflowToggle').addEventListener('change', rerenderAllPages);
+document.getElementById('sectionToggle').addEventListener('change', rerenderAllPages);
 
 document.getElementById('downloadTxt').addEventListener('click', () => {
   const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
