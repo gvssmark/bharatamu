@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telugu Manuscript Text Extractor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600&family=Noto+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --ivory:#FAF6EC;
+    --ivory-deep:#F1EADA;
+    --ink:#2B2118;
+    --ink-soft:#5B4E3F;
+    --maroon:#7A2E2E;
+    --maroon-deep:#5E2222;
+    --gold:#AD8A4E;
+    --line:#DCCEB2;
+    --ok:#3F6B4A;
+    --err:#A23B3B;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--ivory);
+    color:var(--ink);
+    font-family:'Noto Serif', Georgia, serif;
+    line-height:1.5;
+  }
+  .wrap{
+    max-width:880px;
+    margin:0 auto;
+    padding:48px 24px 96px;
+  }
+  header{
+    border-bottom:1px solid var(--line);
+    padding-bottom:28px;
+    margin-bottom:36px;
+  }
+  .kicker{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:12.5px;
+    letter-spacing:.04em;
+    color:var(--maroon);
+    margin:0 0 10px;
+  }
+  h1{
+    font-size:32px;
+    font-weight:600;
+    margin:0 0 12px;
+    color:var(--ink);
+  }
+  header p{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:15px;
+    color:var(--ink-soft);
+    max-width:640px;
+    margin:0;
+  }
+  .panel{
+    background:var(--ivory-deep);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:28px;
+    margin-bottom:28px;
+  }
+  .panel h2{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:14px;
+    font-weight:600;
+    text-transform:none;
+    margin:0 0 16px;
+    color:var(--maroon-deep);
+  }
+  .dropzone{
+    border:1.5px dashed var(--gold);
+    border-radius:4px;
+    background:var(--ivory);
+    padding:32px 20px;
+    text-align:center;
+    cursor:pointer;
+    font-family:system-ui,-apple-system,sans-serif;
+    transition:background .15s ease, border-color .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    background:#FFFDF8;
+    border-color:var(--maroon);
+  }
+  .dropzone .big{
+    font-size:15px;
+    color:var(--ink);
+    margin-bottom:4px;
+  }
+  .dropzone .small{
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  #fileInput{ display:none; }
+  .file-chip{
+    display:none;
+    align-items:center;
+    gap:10px;
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:13.5px;
+    background:var(--ivory);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 14px;
+    margin-top:14px;
+  }
+  .file-chip.show{ display:flex; }
+  .file-chip .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--ok);
+    flex:none;
+  }
+  .controls-row{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    margin-top:22px;
+  }
+  .field{
+    font-family:system-ui,-apple-system,sans-serif;
+  }
+  .field label{
+    display:block;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .field input[type=number]{
+    width:88px;
+    padding:8px 10px;
+    font-size:14px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    font-family:system-ui,-apple-system,sans-serif;
+  }
+  .field input[type=number]:disabled{ opacity:.5; }
+  select{
+    padding:8px 10px;
+    font-size:14px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    font-family:system-ui,-apple-system,sans-serif;
+  }
+  .btn{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:14px;
+    font-weight:600;
+    padding:10px 20px;
+    border-radius:3px;
+    border:1px solid var(--maroon);
+    background:var(--maroon);
+    color:#fff;
+    cursor:pointer;
+  }
+  .btn:hover{ background:var(--maroon-deep); }
+  .btn:disabled{
+    background:#C9B9A0;
+    border-color:#C9B9A0;
+    cursor:not-allowed;
+  }
+  .btn.secondary{
+    background:transparent;
+    color:var(--maroon);
+  }
+  .btn.secondary:hover{ background:#F1E4E4; }
+  .btn:focus-visible, .dropzone:focus-visible, input:focus-visible, select:focus-visible{
+    outline:2px solid var(--maroon);
+    outline-offset:2px;
+  }
+  .note{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:14px;
+    line-height:1.55;
+  }
+  .progress-wrap{
+    margin-top:22px;
+    display:none;
+  }
+  .progress-wrap.show{ display:block; }
+  .progress-label{
+    display:flex;
+    justify-content:space-between;
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .progress-track{
+    height:8px;
+    background:var(--ivory);
+    border:1px solid var(--line);
+    border-radius:5px;
+    overflow:hidden;
+  }
+  .progress-bar{
+    height:100%;
+    width:0%;
+    background:var(--gold);
+    transition:width .2s ease;
+  }
+  #results{ margin-top:8px; }
+  .page-block{
+    border:1px solid var(--line);
+    border-radius:4px;
+    margin-bottom:16px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .page-block .ph{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 16px;
+    background:var(--ivory-deep);
+    border-bottom:1px solid var(--line);
+    font-family:system-ui,-apple-system,sans-serif;
+  }
+  .page-block .ph .pnum{
+    font-size:13px;
+    font-weight:600;
+    color:var(--maroon-deep);
+  }
+  .page-block .ph .copy-btn{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:12px;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:4px 10px;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .page-block .ph .copy-btn:hover{ border-color:var(--maroon); color:var(--maroon); }
+  .page-text{
+    font-family:'Noto Sans Telugu','Noto Serif',serif;
+    font-size:17px;
+    line-height:1.9;
+    white-space:pre-wrap;
+    padding:18px 20px;
+    color:var(--ink);
+  }
+  .page-text[contenteditable="true"]:focus{
+    outline:1.5px solid var(--gold);
+    outline-offset:-1.5px;
+  }
+  .empty-msg{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    text-align:center;
+    padding:30px 0;
+  }
+  .download-bar{
+    display:none;
+    gap:12px;
+    margin-top:24px;
+    flex-wrap:wrap;
+  }
+  .download-bar.show{ display:flex; }
+  .status-line{
+    font-family:system-ui,-apple-system,sans-serif;
+    font-size:13px;
+    color:var(--err);
+    margin-top:10px;
+    display:none;
+  }
+  .status-line.show{ display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="kicker">TELUGU TEXT EXTRACTION</p>
+    <h1>Telugu Manuscript Text Extractor</h1>
+    <p>This tool reads Telugu PDFs that use legacy typesetting fonts (Dharani, Jyothi, Anupama, Gowthami and similar) — the kind that show correctly on the printed page but turn to garbage characters when copied. It works by recognizing each page as an image, not by copying the underlying text, so it works regardless of the font encoding. Everything runs in your browser; no file is uploaded anywhere.</p>
+  </header>
+
+  <div class="panel">
+    <h2>1. Choose a PDF</h2>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload PDF">
+      <div class="big">Click to choose a file, or drag a PDF here</div>
+      <div class="small">Scanned or font-embedded Telugu PDFs both work</div>
+      <input type="file" id="fileInput" accept="application/pdf">
+    </div>
+    <div class="file-chip" id="fileChip"><span class="dot"></span><span id="fileChipText"></span></div>
+
+    <div class="controls-row">
+      <div class="field">
+        <label for="pageStart">From page</label>
+        <input type="number" id="pageStart" min="1" value="1" disabled>
+      </div>
+      <div class="field">
+        <label for="pageEnd">To page</label>
+        <input type="number" id="pageEnd" min="1" value="1" disabled>
+      </div>
+      <div class="field">
+        <label for="qualitySelect">Render quality</label>
+        <select id="qualitySelect">
+          <option value="2.2">Standard (faster)</option>
+          <option value="3" selected>High (recommended)</option>
+          <option value="3.6">Very high (slower)</option>
+        </select>
+      </div>
+      <button class="btn" id="extractBtn" disabled>Extract text</button>
+      <button class="btn secondary" id="stopBtn" style="display:none;">Stop</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:var(--ink-soft);">
+      <input type="checkbox" id="cleanupToggle" checked>
+      Clean up stray bracket artifacts (recommended — fixes a common OCR misread of ప్ర/వ్ర/శ్ర/గ్ర-type conjuncts as "(" or "[")
+    </label>
+    <p class="note">First run downloads a one-time Telugu OCR language model (~15 MB) and caches it. Each page takes roughly 3–8 seconds depending on your device — for an 883-page book, extract in batches (e.g. 20–50 pages at a time) rather than all at once. Start with a small range to check quality before committing to the whole book. OCR is not perfect, especially on dense conjunct clusters — proofread important passages.</p>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <div class="panel" id="progressPanel" style="display:none;">
+    <h2>2. Progress</h2>
+    <div class="progress-wrap show">
+      <div class="progress-label">
+        <span id="progressPageLabel">Waiting to start…</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <h2>3. Extracted text</h2>
+    <div id="results"></div>
+    <div class="download-bar" id="downloadBar">
+      <button class="btn secondary" id="downloadTxt">Download as .txt</button>
+      <button class="btn secondary" id="downloadHtml">Download as .html</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfDoc = null;
+let pdfFileName = '';
+let worker = null;
+let stopRequested = false;
+const pageResults = {}; // pageNum -> raw OCR text (unmodified)
+
+// Tesseract's Telugu model occasionally misreads the subjoined-ర hook in
+// conjuncts (ప్ర, వ్ర, శ్ర, గ్ర, ధ్ర...) as a literal "(" or "[". These strays
+// never appear as matched pairs and often land mid-word, unlike real
+// punctuation, so we can strip them heuristically without touching genuine
+// parentheses (which are always closed).
+function cleanupTeluguOcr(text){
+  const T = '[\\u0C00-\\u0C7F]';
+  // 1. Mid-word stray bracket/pipe with a Telugu letter on both sides — always spurious.
+  let prev;
+  do{
+    prev = text;
+    text = text.replace(new RegExp('(' + T + ')[\\(\\[\\|](' + T + ')', 'g'), '$1$2');
+  } while (text !== prev);
+
+  // 2. Stray "|" — Telugu verse punctuation uses ॥ / । (real Unicode danda marks),
+  //    never the ASCII pipe, so any ASCII pipe here is a misread artifact.
+  text = text.replace(/\|/g, '');
+
+  // 3. Proper stack-based bracket matching, scoped per paragraph: a "(" only
+  //    survives if it has a real, properly-nested ")" closing it (same for []).
+  //    A naive "is there a ')' somewhere later" search is NOT enough — a later
+  //    genuine closing paren can wrongly "match" an earlier stray one. Only a
+  //    real nested-pair match (nearest unclosed open <-> next close) counts.
+  function stripUnmatchedPair(str, openCh, closeCh){
+    const stack = [];
+    const drop = new Set();
+    for (let i = 0; i < str.length; i++){
+      const ch = str[i];
+      if (ch === openCh) stack.push(i);
+      else if (ch === closeCh){
+        if (stack.length) stack.pop();
+        else drop.add(i); // a close with nothing open before it
+      }
+    }
+    stack.forEach(i => drop.add(i)); // opens that never got closed
+    let out = '';
+    for (let i = 0; i < str.length; i++){
+      if (!drop.has(i)) out += str[i];
+    }
+    return out;
+  }
+
+  const paragraphs = text.split(/\n{2,}/);
+  const cleaned = paragraphs.map(para => {
+    para = stripUnmatchedPair(para, '(', ')');
+    para = stripUnmatchedPair(para, '[', ']');
+    return para;
+  });
+  return cleaned.join('\n\n');
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileChip = document.getElementById('fileChip');
+const fileChipText = document.getElementById('fileChipText');
+const pageStart = document.getElementById('pageStart');
+const pageEnd = document.getElementById('pageEnd');
+const extractBtn = document.getElementById('extractBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusLine = document.getElementById('statusLine');
+const progressPanel = document.getElementById('progressPanel');
+const progressPageLabel = document.getElementById('progressPageLabel');
+const progressPct = document.getElementById('progressPct');
+const progressBar = document.getElementById('progressBar');
+const resultsPanel = document.getElementById('resultsPanel');
+const resultsEl = document.getElementById('results');
+const downloadBar = document.getElementById('downloadBar');
+const qualitySelect = document.getElementById('qualitySelect');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function showStatus(msg){
+  statusLine.textContent = msg;
+  statusLine.classList.add('show');
+}
+function clearStatus(){
+  statusLine.classList.remove('show');
+  statusLine.textContent = '';
+}
+
+async function handleFile(file){
+  clearStatus();
+  if (file.type !== 'application/pdf'){
+    showStatus('Please choose a PDF file.');
+    return;
+  }
+  pdfFileName = file.name.replace(/\.pdf$/i, '');
+  fileChipText.textContent = 'Loading ' + file.name + '…';
+  fileChip.classList.add('show');
+  try{
+    const buf = await file.arrayBuffer();
+    pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+    fileChipText.textContent = file.name + ' — ' + pdfDoc.numPages + ' pages';
+    pageStart.disabled = false;
+    pageEnd.disabled = false;
+    pageStart.min = 1; pageStart.max = pdfDoc.numPages; pageStart.value = 1;
+    pageEnd.min = 1; pageEnd.max = pdfDoc.numPages;
+    pageEnd.value = Math.min(10, pdfDoc.numPages);
+    extractBtn.disabled = false;
+  } catch(err){
+    console.error(err);
+    showStatus('Could not read that PDF: ' + err.message);
+    fileChip.classList.remove('show');
+  }
+}
+
+async function getWorker(){
+  if (worker) return worker;
+  progressPageLabel.textContent = 'Downloading Telugu OCR model (first run only)…';
+  progressPanel.style.display = 'block';
+  worker = await Tesseract.createWorker('tel', 1, {
+    logger: m => {
+      if (m.status === 'recognizing text' && typeof m.progress === 'number'){
+        progressPct.textContent = Math.round(m.progress * 100) + '%';
+      }
+    }
+  });
+  return worker;
+}
+
+extractBtn.addEventListener('click', runExtraction);
+stopBtn.addEventListener('click', () => { stopRequested = true; });
+
+async function runExtraction(){
+  clearStatus();
+  const start = parseInt(pageStart.value, 10);
+  const end = parseInt(pageEnd.value, 10);
+  if (!pdfDoc){ showStatus('Choose a PDF first.'); return; }
+  if (!start || !end || start < 1 || end > pdfDoc.numPages || start > end){
+    showStatus('Enter a valid page range (1–' + pdfDoc.numPages + ').');
+    return;
+  }
+  if ((end - start + 1) > 60){
+    showStatus('For best results in one run, keep ranges to about 60 pages or fewer — extract the rest in a second batch.');
+    return;
+  }
+
+  extractBtn.disabled = true;
+  stopBtn.style.display = 'inline-block';
+  stopRequested = false;
+  progressPanel.style.display = 'block';
+  resultsPanel.style.display = 'block';
+  downloadBar.classList.remove('show');
+
+  const scale = parseFloat(qualitySelect.value);
+
+  try{
+    const w = await getWorker();
+
+    for (let p = start; p <= end; p++){
+      if (stopRequested){
+        progressPageLabel.textContent = 'Stopped at page ' + p + '.';
+        break;
+      }
+      progressPageLabel.textContent = 'Rendering page ' + p + ' of ' + end + '…';
+      progressPct.textContent = '0%';
+      progressBar.style.width = Math.round(((p - start) / (end - start + 1)) * 100) + '%';
+
+      const page = await pdfDoc.getPage(p);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      progressPageLabel.textContent = 'Recognizing Telugu text — page ' + p + ' of ' + end + '…';
+      const { data } = await w.recognize(canvas);
+      const text = (data && data.text ? data.text : '').trim();
+      pageResults[p] = text;
+      addPageBlock(p, document.getElementById('cleanupToggle').checked ? cleanupTeluguOcr(text) : text);
+
+      progressBar.style.width = Math.round(((p - start + 1) / (end - start + 1)) * 100) + '%';
+    }
+    progressPageLabel.textContent = stopRequested ? 'Stopped.' : 'Done — pages ' + start + '–' + (stopRequested ? p : end) + ' extracted.';
+    progressPct.textContent = '';
+    if (Object.keys(pageResults).length) downloadBar.classList.add('show');
+  } catch(err){
+    console.error(err);
+    showStatus('Something went wrong during extraction: ' + err.message);
+  } finally{
+    extractBtn.disabled = false;
+    stopBtn.style.display = 'none';
+  }
+}
+
+function addPageBlock(pageNum, text){
+  const empty = resultsEl.querySelector('.empty-msg');
+  if (empty) empty.remove();
+
+  let block = document.getElementById('pageblock-' + pageNum);
+  if (!block){
+    block = document.createElement('div');
+    block.className = 'page-block';
+    block.id = 'pageblock-' + pageNum;
+    block.innerHTML =
+      '<div class="ph"><span class="pnum">Page ' + pageNum + '</span>' +
+      '<button class="copy-btn" data-page="' + pageNum + '">Copy</button></div>' +
+      '<div class="page-text" contenteditable="true" id="pagetext-' + pageNum + '"></div>';
+
+    // insert in correct numeric order
+    const existing = Array.from(resultsEl.children);
+    const after = existing.find(el => parseInt(el.id.replace('pageblock-',''),10) > pageNum);
+    if (after) resultsEl.insertBefore(block, after);
+    else resultsEl.appendChild(block);
+
+    block.querySelector('.copy-btn').addEventListener('click', () => {
+      const t = document.getElementById('pagetext-' + pageNum).innerText;
+      navigator.clipboard.writeText(t);
+      const btn = block.querySelector('.copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => btn.textContent = orig, 1200);
+    });
+  }
+  document.getElementById('pagetext-' + pageNum).innerText = text || '(no text recognized on this page)';
+}
+
+document.getElementById('cleanupToggle').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  Object.keys(pageResults).forEach(p => {
+    const el = document.getElementById('pagetext-' + p);
+    if (!el) return;
+    const raw = pageResults[p];
+    el.innerText = on ? cleanupTeluguOcr(raw) : (raw || '(no text recognized on this page)');
+  });
+});
+
+document.getElementById('downloadTxt').addEventListener('click', () => {
+  const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
+  let out = '';
+  pages.forEach(p => {
+    const liveText = document.getElementById('pagetext-' + p);
+    out += '--- Page ' + p + ' ---\n' + (liveText ? liveText.innerText : pageResults[p]) + '\n\n';
+  });
+  downloadBlob(out, (pdfFileName || 'extracted') + '.txt', 'text/plain;charset=utf-8');
+});
+
+document.getElementById('downloadHtml').addEventListener('click', () => {
+  const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
+  let body = '';
+  pages.forEach(p => {
+    const liveText = document.getElementById('pagetext-' + p);
+    const t = (liveText ? liveText.innerText : pageResults[p]).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    body += '<section><h2>Page ' + p + '</h2><p>' + t.replace(/\n/g,'<br>') + '</p></section>\n';
+  });
+  const html = '<!DOCTYPE html><html lang="te"><head><meta charset="UTF-8">' +
+    '<title>' + (pdfFileName || 'Extracted text') + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu&display=swap" rel="stylesheet">' +
+    '<style>body{font-family:"Noto Sans Telugu",serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.9;font-size:18px;} h2{font-family:system-ui,sans-serif;font-size:13px;color:#7A2E2E;border-top:1px solid #ddd;padding-top:18px;margin-top:28px;} p{white-space:pre-wrap;}</style></head><body>' +
+    '<h1 style="font-family:system-ui,sans-serif;font-size:20px;">' + (pdfFileName || 'Extracted text') + '</h1>' +
+    body + '</body></html>';
+  downloadBlob(html, (pdfFileName || 'extracted') + '.html', 'text/html;charset=utf-8');
+});
+
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
