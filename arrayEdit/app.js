@@ -26,10 +26,7 @@ let state = {
   page: 1,
   pageSize: 50,
   search: "",
-  originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false,
-  lastSavedAt: null,
-  pendingWrites: 0,
-  writeQueue: Promise.resolve()
+  originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
 };
 
 const els = {};
@@ -47,9 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
   els.csvButton.addEventListener("click", exportCsv);
   els.clearEditsButton.addEventListener("click", clearSavedEdits);
   els.clearDbButton.addEventListener("click", clearEntireIndexedDb);
-  els.backupButton.addEventListener("click", downloadBackup);
-  els.restoreButton.addEventListener("click", () => els.restoreInput.click());
-  els.restoreInput.addEventListener("change", restoreFromBackup);
   els.anyColumnSelect.addEventListener("change", onAnyColumnSelected);
   els.anyColumnToggle.addEventListener("click", toggleAnyColumnEditing);
   els.pageSize.addEventListener("change", () => {
@@ -83,22 +77,15 @@ function updateButtons(enabled) {
   els.saveButton.disabled = !enabled;
   els.csvButton.disabled = !enabled;
   els.clearEditsButton.disabled = !enabled;
-  els.backupButton.disabled = !enabled;
-  els.restoreButton.disabled = !enabled;
 }
 
 async function onFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  // Reset the file input so the same file can be selected again later.
-  event.target.value = "";
-
   try {
-    setStatus("busy", "Reading JavaScript array...");
+    setStatus("busy", "Reading file...");
     const text = await file.text();
-
-    // Parsing is completely independent of IndexedDB.
     const parsed = parseJsArrayFile(text);
 
     state.fileName = file.name;
@@ -108,76 +95,38 @@ async function onFileSelected(event) {
     state.originalText = text;
     state.page = 1;
     state.search = "";
-    state.selectedEditColumn = null;
-    state.anyColumnEditEnabled = false;
     els.searchInput.value = "";
 
-    // IMPORTANT:
-    // Show the parsed rows immediately. A browser-storage problem must
-    // never make a valid JS file appear to contain zero rows.
+    const restored = await loadEdits(state.fileKey);
+    if (restored) {
+      applyStoredEdits(restored);
+      setStatus("saved", `Recovered saved edits • ${restored.count} cell(s)`);
+    } else {
+      setStatus("saved", "File loaded • changes will be saved automatically");
+    }
+
     els.fileInfo.textContent =
       `${file.name} • ${state.rows.length.toLocaleString()} rows • array: ${state.variableName}`;
 
     els.message.textContent =
-      "File loaded successfully. Input 1, Input 2 and Input 3 are editable. " +
-      "Select an original column and turn editing ON only when required.";
+      "Edit the three yellow columns. Every edit is written to IndexedDB immediately. " +
+      "If the computer loses power, reopening the same source file restores the saved edits.";
 
     updateButtons(true);
     populateColumnSelector();
     render();
 
-    // Storage/recovery is a SECOND step. Failure here must not discard the
-    // successfully parsed table.
-    try {
-      const restoredSnapshot = await loadSnapshot(state.fileKey);
-      const restored = await loadEdits(state.fileKey);
-
-      if (restoredSnapshot && Array.isArray(restoredSnapshot.rows) &&
-          restoredSnapshot.rows.length) {
-        state.rows = restoredSnapshot.rows.map(row => normalizeRow(row));
-        state.lastSavedAt = restoredSnapshot.updatedAt;
-
-        els.fileInfo.textContent =
-          `${file.name} • ${state.rows.length.toLocaleString()} rows • array: ${state.variableName}`;
-
-        setStatus(
-          "saved",
-          `Recovered complete backup • ${restoredSnapshot.editedCells.toLocaleString()} edited cell(s)`
-        );
-        render();
-      } else if (restored && restored.count > 0) {
-        applyStoredEdits(restored);
-        setStatus(
-          "saved",
-          `Recovered cell edits • ${restored.count.toLocaleString()} cell(s)`
-        );
-        render();
-      } else {
-        await saveSnapshot();
-        setStatus("saved", "SAVED • recovery copy created");
-      }
-    } catch (storageError) {
-      // The data is already displayed. Do NOT call resetState().
-      console.error("Storage/recovery error:", storageError);
-      setStatus("error", "Rows loaded • browser backup unavailable");
-      els.message.textContent =
-        "The JS array was loaded successfully, but browser recovery storage " +
-        "could not be opened. You can still edit and use Download Backup.";
-    }
-
+    // Ask the browser for persistent storage where supported.
     if (navigator.storage && navigator.storage.persist) {
       try { await navigator.storage.persist(); } catch (_) {}
     }
-
   } catch (error) {
-    // Only actual parsing/file-reading errors reach this block.
-    console.error("JavaScript array parsing error:", error);
+    console.error(error);
     resetState();
-    setStatus("error", "Could not read this JavaScript array");
+    setStatus("error", "Could not read this JS array");
     els.message.textContent =
-      "The file could not be parsed. The file must contain a JavaScript " +
-      "array such as: var Adi = [[...], [...]];";
-
+      "The file could not be parsed. This editor expects a JavaScript array literal, " +
+      "for example: const padyamData = [[...], [...]];";
     alert("Could not parse the uploaded JavaScript array.\n\n" + error.message);
   }
 }
@@ -356,7 +305,7 @@ class ArrayLiteralParser {
 /* ---------- IndexedDB persistence ---------- */
 
 const DB_NAME = "JsArrayTableEditorDB";
-const DB_VERSION = 2;
+const DB_VERSION = 1;
 let dbPromise;
 
 function openDb() {
@@ -374,25 +323,9 @@ function openDb() {
         const store = db.createObjectStore("cells", { keyPath: ["fileKey", "row", "col"] });
         store.createIndex("byFile", "fileKey", { unique: false });
       }
-      if (!db.objectStoreNames.contains("snapshots")) {
-        db.createObjectStore("snapshots", { keyPath: "fileKey" });
-      }
     };
 
-    req.onblocked = () => {
-      reject(new Error(
-        "IndexedDB upgrade is blocked by another open tab. Close older copies of this utility and try again."
-      ));
-    };
-
-    req.onsuccess = () => {
-      const db = req.result;
-      db.onversionchange = () => {
-        db.close();
-      };
-      resolve(db);
-    };
-
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 
@@ -455,7 +388,7 @@ async function clearSavedEdits() {
   const db = await openDb();
 
   await new Promise((resolve, reject) => {
-    const tx = db.transaction(["cells", "files", "snapshots"], "readwrite");
+    const tx = db.transaction(["cells", "files"], "readwrite");
     const cells = tx.objectStore("cells").index("byFile");
     const req = cells.openKeyCursor(IDBKeyRange.only(state.fileKey));
     req.onsuccess = () => {
@@ -465,7 +398,6 @@ async function clearSavedEdits() {
       cursor.continue();
     };
     tx.objectStore("files").delete(state.fileKey);
-    tx.objectStore("snapshots").delete(state.fileKey);
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
@@ -480,15 +412,19 @@ async function clearSavedEdits() {
 }
 
 function queueCellSave(row, col, value, inputElement) {
-  setStatus("busy", "Saving edit...");
+  setStatus("busy", "Saving...");
 
-  saveEditAndSnapshot(row, col, value)
+  // One IndexedDB transaction per edit. No debounce: this is deliberate,
+  // so the edit is committed as soon as possible for power-loss protection.
+  saveCell(state.fileKey, row, col, value)
     .then(() => {
       inputElement.classList.remove("dirty");
+      setStatus("saved", "All changes saved locally");
     })
     .catch(error => {
-      inputElement.classList.add("dirty");
       console.error(error);
+      inputElement.classList.add("dirty");
+      setStatus("error", "Could not save this edit");
     });
 }
 
@@ -719,8 +655,7 @@ function resetState() {
   state = {
     fileName: "", fileKey: "", variableName: "padyamData", rows: [],
     filteredIndexes: [], page: 1, pageSize: Number(els.pageSize.value),
-    search: "", originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false,
-    lastSavedAt: null, pendingWrites: 0, writeQueue: Promise.resolve()
+    search: "", originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
   };
   updateButtons(false);
   els.dataTable.hidden = true;
@@ -730,204 +665,6 @@ function resetState() {
 
 function jsString(value) {
   return JSON.stringify(String(value ?? ""));
-}
-
-function countEditedCells(rows) {
-  let count = 0;
-  for (const row of rows) {
-    for (let col = 6; col <= 8; col++) {
-      if (String(row[col] ?? "") !== "") count++;
-    }
-    // Count edits in original columns only when they differ from the
-    // original source values is not available as a separate baseline here.
-    // The snapshot still contains every value and is the recovery source.
-  }
-  return count;
-}
-
-async function storageAvailable() {
-  try {
-    await openDb();
-    return true;
-  } catch (error) {
-    console.error("IndexedDB unavailable:", error);
-    return false;
-  }
-}
-
-async function saveSnapshot() {
-  if (!state.fileKey || !state.rows.length) return;
-
-  const snapshot = {
-    fileKey: state.fileKey,
-    fileName: state.fileName,
-    variableName: state.variableName,
-    rows: state.rows.map(row => row.slice()),
-    updatedAt: Date.now(),
-    editedCells: countEditedCells(state.rows)
-  };
-
-  const db = await openDb();
-
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(["files", "snapshots"], "readwrite");
-
-    tx.objectStore("files").put({
-      fileKey: state.fileKey,
-      fileName: state.fileName,
-      variableName: state.variableName,
-      updatedAt: snapshot.updatedAt,
-      rowCount: state.rows.length
-    });
-
-    tx.objectStore("snapshots").put(snapshot);
-
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error || new Error("Snapshot transaction aborted"));
-  });
-
-  state.lastSavedAt = snapshot.updatedAt;
-}
-
-async function loadSnapshot(fileKey) {
-  const db = await openDb();
-
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction("snapshots", "readonly");
-    const req = tx.objectStore("snapshots").get(fileKey);
-
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function saveEditAndSnapshot(row, col, value) {
-  // Queue writes so rapid typing cannot cause overlapping transactions
-  // to finish out of order.
-  state.pendingWrites++;
-
-  state.writeQueue = state.writeQueue
-    .then(async () => {
-      const db = await openDb();
-
-      // Transaction 1: persist the individual cell and metadata.
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(["files", "cells"], "readwrite");
-        tx.objectStore("files").put({
-          fileKey: state.fileKey,
-          fileName: state.fileName,
-          variableName: state.variableName,
-          updatedAt: Date.now(),
-          rowCount: state.rows.length
-        });
-        tx.objectStore("cells").put({
-          fileKey: state.fileKey,
-          row,
-          col,
-          value,
-          updatedAt: Date.now()
-        });
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error || new Error("Cell save aborted"));
-      });
-
-      // Transaction 2: save the complete current table.
-      await saveSnapshot();
-
-      state.pendingWrites--;
-      setStatus("saved", `SAVED • ${state.rows.length.toLocaleString()} rows • ${state.pendingWrites ? state.pendingWrites + " write(s) pending" : "recovery copy current"}`);
-    })
-    .catch(error => {
-      state.pendingWrites = Math.max(0, state.pendingWrites - 1);
-      console.error(error);
-      setStatus("error", "SAVE FAILED — do not close this page");
-      throw error;
-    });
-
-  return state.writeQueue;
-}
-
-async function flushPendingWrites() {
-  try {
-    await state.writeQueue;
-  } catch (_) {
-    // Error is already reflected in the status.
-  }
-}
-
-function makeJsOutput() {
-  const body = state.rows.map(row => {
-    const values = row.map(value => {
-      if (typeof value === "number") return String(value);
-      if (typeof value === "boolean") return String(value);
-      if (value === null) return "null";
-      return jsString(value);
-    });
-    return "  [" + values.join(", ") + "]";
-  }).join(",\n");
-
-  return `// Exported by JS Array Table Editor
-// Original source: ${state.fileName}
-var ${state.variableName} = [
-${body}
-];
-`;
-}
-
-function downloadBackup() {
-  if (!state.rows.length) return;
-
-  const backup = {
-    format: "JS Array Table Editor Backup",
-    version: 2,
-    sourceFile: state.fileName,
-    variableName: state.variableName,
-    savedAt: new Date().toISOString(),
-    rows: state.rows
-  };
-
-  downloadText(
-    JSON.stringify(backup),
-    `${state.fileName.replace(/\.[^.]+$/, "")}_backup.json`,
-    "application/json;charset=utf-8"
-  );
-
-  setStatus("saved", "Backup downloaded");
-}
-
-async function restoreFromBackup(event) {
-  const file = event.target.files[0];
-  event.target.value = "";
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const backup = JSON.parse(text);
-
-    if (!backup || !Array.isArray(backup.rows)) {
-      throw new Error("This is not a valid editor backup.");
-    }
-
-    if (!confirm(
-      `Restore ${backup.rows.length.toLocaleString()} rows from this backup?\\n\\n` +
-      "The current table will be replaced. This action can be undone only by restoring another backup."
-    )) return;
-
-    state.rows = backup.rows.map(row => normalizeRow(row));
-    if (backup.variableName) state.variableName = backup.variableName;
-
-    // Save restored state immediately.
-    await saveSnapshot();
-
-    setStatus("saved", "Backup restored and saved");
-    render();
-  } catch (error) {
-    console.error(error);
-    setStatus("error", "Backup restore failed");
-    alert("Could not restore the backup.\\n\\n" + error.message);
-  }
 }
 
 async function clearEntireIndexedDb() {
@@ -952,18 +689,31 @@ async function clearEntireIndexedDb() {
   }
 }
 
-async function exportJs() {
+function exportJs() {
   if (!state.rows.length) return;
 
-  // Never export until all queued IndexedDB writes have completed.
-  await flushPendingWrites();
+  const body = state.rows.map(row => {
+    const values = row.map(value => {
+      if (typeof value === "number") return String(value);
+      if (typeof value === "boolean") return String(value);
+      if (value === null) return "null";
+      return jsString(value);
+    });
 
-  if (state.pendingWrites !== 0) {
-    alert("Some edits are still being saved. Please wait until the status shows SAVED, then try again.");
-    return;
-  }
+    return "  [" + values.join(", ") + "]";
+  }).join(",\n");
 
-  const output = makeJsOutput();
+  const output =
+`// Exported by JS Array Table Editor
+// Original source: ${state.fileName}
+// Original fields: 6
+// Added fields: ${EXTRA_COLUMNS.join(", ")}
+var ${state.variableName} = [
+${body}
+];
+
+`;
+
   const base = state.fileName.replace(/\.[^.]+$/, "") || "array";
   downloadText(output, `${base}_edited.js`, "text/javascript;charset=utf-8");
   setStatus("saved", "New JS file exported");
@@ -1007,26 +757,3 @@ async function sha256(text) {
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
 }
-
-
-/* Best-effort final flush. The important protection is that every edit is
-   already queued immediately; pagehide only waits for any currently running
-   IndexedDB transaction when the browser allows it. */
-window.addEventListener("pagehide", () => {
-  // Do not start a new write here. Existing IndexedDB transactions are already
-  // durable; this handler intentionally avoids unreliable unload-time work.
-});
-
-
-/* Periodic recovery checkpoint.
-   Every 30 seconds, if a file is loaded and no edit is currently being
-   written, save the complete table again. */
-setInterval(async () => {
-  if (!state.fileKey || !state.rows.length || state.pendingWrites > 0) return;
-
-  try {
-    await saveSnapshot();
-  } catch (error) {
-    console.error("Periodic recovery checkpoint failed:", error);
-  }
-}, 30000);
