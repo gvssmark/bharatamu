@@ -359,9 +359,85 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
 let pdfDoc = null;
 let pdfFileName = '';
+let bookKey = '';
 let worker = null;
 let stopRequested = false;
 const pageResults = {}; // pageNum -> raw OCR text (unmodified)
+
+// --- Persistent cache (IndexedDB) -----------------------------------------
+// Auto-saves each page's raw OCR text as soon as it's recognized, keyed to
+// this specific file (by name + page count), so closing the tab or the
+// browser mid-book doesn't lose progress. Re-opening the same PDF restores
+// everything already extracted. Cleared automatically once you export.
+const IDB_NAME = 'teluguOcrExtractor';
+const IDB_STORE = 'pages';
+function openIdb(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)){
+        db.createObjectStore(IDB_STORE); // key: `${bookKey}::${pageNum}`
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSavePage(key, pageNum, text){
+  try{
+    const db = await openIdb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(text, key + '::' + pageNum);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch(e){ console.warn('Could not save page to local cache:', e); }
+}
+async function idbLoadBook(key){
+  try{
+    const db = await openIdb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const range = IDBKeyRange.bound(key + '::', key + '::\uffff');
+      const cursorReq = store.openCursor(range);
+      const found = {};
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor){
+          const pageNum = parseInt(cursor.key.slice((key + '::').length), 10);
+          found[pageNum] = cursor.value;
+          cursor.continue();
+        } else {
+          resolve(found);
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+    });
+  } catch(e){ console.warn('Could not read local cache:', e); return {}; }
+}
+async function idbClearBook(key){
+  try{
+    const db = await openIdb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const range = IDBKeyRange.bound(key + '::', key + '::\uffff');
+      const cursorReq = store.openCursor(range);
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor){ cursor.delete(); cursor.continue(); }
+        else resolve();
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+    });
+  } catch(e){ console.warn('Could not clear local cache:', e); }
+}
+function makeBookKey(fileName, numPages){
+  return fileName.replace(/[^a-zA-Z0-9_-]/g, '_') + '_' + numPages + 'p';
+}
 
 // Tesseract's Telugu model occasionally misreads the subjoined-ర hook in
 // conjuncts (ప్ర, వ్ర, శ్ర, గ్ర, ధ్ర...) as a literal "(" or "[". These strays
@@ -501,6 +577,7 @@ async function handleFile(file){
   try{
     const buf = await file.arrayBuffer();
     pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+    bookKey = makeBookKey(pdfFileName, pdfDoc.numPages);
     fileChipText.textContent = file.name + ' — ' + pdfDoc.numPages + ' pages';
     pageStart.disabled = false;
     pageEnd.disabled = false;
@@ -508,11 +585,36 @@ async function handleFile(file){
     pageEnd.min = 1; pageEnd.max = pdfDoc.numPages;
     pageEnd.value = Math.min(10, pdfDoc.numPages);
     extractBtn.disabled = false;
+
+    // Restore any pages already extracted for this exact file in a previous session.
+    const cached = await idbLoadBook(bookKey);
+    const cachedPages = Object.keys(cached).map(Number).sort((a,b) => a-b);
+    if (cachedPages.length){
+      resultsPanel.style.display = 'block';
+      cachedPages.forEach(p => {
+        pageResults[p] = cached[p];
+        addPageBlock(p, getDisplayText(cached[p]));
+      });
+      downloadBar.classList.add('show');
+      showRestoreNote(cachedPages.length, Math.min(...cachedPages), Math.max(...cachedPages));
+    }
   } catch(err){
     console.error(err);
     showStatus('Could not read that PDF: ' + err.message);
     fileChip.classList.remove('show');
   }
+}
+
+function showRestoreNote(count, minP, maxP){
+  let note = document.getElementById('restoreNote');
+  if (!note){
+    note = document.createElement('p');
+    note.id = 'restoreNote';
+    note.className = 'note';
+    note.style.color = 'var(--ok)';
+    document.querySelector('.panel').appendChild(note);
+  }
+  note.textContent = 'Restored ' + count + ' previously extracted page(s) (pages ' + minP + '–' + maxP + ') saved locally from an earlier session.';
 }
 
 async function getWorker(){
@@ -580,6 +682,7 @@ async function runExtraction(){
       const text = (data && data.text ? data.text : '').trim();
       pageResults[p] = text;
       addPageBlock(p, getDisplayText(text));
+      idbSavePage(bookKey, p, text); // fire-and-forget; extraction doesn't wait on this
 
       progressBar.style.width = Math.round(((p - start + 1) / (end - start + 1)) * 100) + '%';
     }
@@ -639,7 +742,7 @@ document.getElementById('cleanupToggle').addEventListener('change', rerenderAllP
 document.getElementById('reflowToggle').addEventListener('change', rerenderAllPages);
 document.getElementById('sectionToggle').addEventListener('change', rerenderAllPages);
 
-document.getElementById('downloadTxt').addEventListener('click', () => {
+document.getElementById('downloadTxt').addEventListener('click', async () => {
   const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
   let out = '';
   pages.forEach(p => {
@@ -647,9 +750,10 @@ document.getElementById('downloadTxt').addEventListener('click', () => {
     out += '--- Page ' + p + ' ---\n' + (liveText ? liveText.innerText : pageResults[p]) + '\n\n';
   });
   downloadBlob(out, (pdfFileName || 'extracted') + '.txt', 'text/plain;charset=utf-8');
+  if (bookKey){ await idbClearBook(bookKey); showExportedClearedNote(); }
 });
 
-document.getElementById('downloadHtml').addEventListener('click', () => {
+document.getElementById('downloadHtml').addEventListener('click', async () => {
   const pages = Object.keys(pageResults).map(Number).sort((a,b) => a-b);
   let body = '';
   pages.forEach(p => {
@@ -664,7 +768,21 @@ document.getElementById('downloadHtml').addEventListener('click', () => {
     '<h1 style="font-family:system-ui,sans-serif;font-size:20px;">' + (pdfFileName || 'Extracted text') + '</h1>' +
     body + '</body></html>';
   downloadBlob(html, (pdfFileName || 'extracted') + '.html', 'text/html;charset=utf-8');
+  if (bookKey){ await idbClearBook(bookKey); showExportedClearedNote(); }
 });
+
+function showExportedClearedNote(){
+  clearStatus();
+  let el = document.getElementById('exportedClearedNote');
+  if (!el){
+    el = document.createElement('p');
+    el.id = 'exportedClearedNote';
+    el.className = 'note';
+    el.style.color = 'var(--ok)';
+    downloadBar.after(el);
+  }
+  el.textContent = 'Exported — the locally saved copy of this book\'s progress has been cleared (the text on screen is untouched).';
+}
 
 function downloadBlob(content, filename, mime){
   const blob = new Blob([content], { type: mime });
