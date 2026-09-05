@@ -26,7 +26,10 @@ let state = {
   page: 1,
   pageSize: 50,
   search: "",
-  originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
+  originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false,
+  lastSavedAt: null,
+  pendingWrites: 0,
+  writeQueue: Promise.resolve()
 };
 
 const els = {};
@@ -44,6 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
   els.csvButton.addEventListener("click", exportCsv);
   els.clearEditsButton.addEventListener("click", clearSavedEdits);
   els.clearDbButton.addEventListener("click", clearEntireIndexedDb);
+  els.backupButton.addEventListener("click", downloadBackup);
+  els.restoreButton.addEventListener("click", () => els.restoreInput.click());
+  els.restoreInput.addEventListener("change", restoreFromBackup);
   els.anyColumnSelect.addEventListener("change", onAnyColumnSelected);
   els.anyColumnToggle.addEventListener("click", toggleAnyColumnEditing);
   els.pageSize.addEventListener("change", () => {
@@ -77,6 +83,8 @@ function updateButtons(enabled) {
   els.saveButton.disabled = !enabled;
   els.csvButton.disabled = !enabled;
   els.clearEditsButton.disabled = !enabled;
+  els.backupButton.disabled = !enabled;
+  els.restoreButton.disabled = !enabled;
 }
 
 async function onFileSelected(event) {
@@ -97,12 +105,23 @@ async function onFileSelected(event) {
     state.search = "";
     els.searchInput.value = "";
 
+    const restoredSnapshot = await loadSnapshot(state.fileKey);
     const restored = await loadEdits(state.fileKey);
-    if (restored) {
+
+    if (restoredSnapshot) {
+      // Complete snapshot is the primary recovery source.
+      state.rows = restoredSnapshot.rows;
+      state.lastSavedAt = restoredSnapshot.updatedAt;
+      setStatus("saved", `Recovered complete backup • ${restoredSnapshot.editedCells.toLocaleString()} edited cell(s)`);
+    } else if (restored) {
+      // Backward compatibility with older versions that only stored cells.
       applyStoredEdits(restored);
-      setStatus("saved", `Recovered saved edits • ${restored.count} cell(s)`);
+      setStatus("saved", `Recovered cell edits • ${restored.count.toLocaleString()} cell(s)`);
     } else {
-      setStatus("saved", "File loaded • changes will be saved automatically");
+      setStatus("saved", "File loaded • ready for editing");
+      // Immediately create a baseline snapshot so recovery exists even
+      // before the first edit.
+      await saveSnapshot();
     }
 
     els.fileInfo.textContent =
@@ -305,7 +324,7 @@ class ArrayLiteralParser {
 /* ---------- IndexedDB persistence ---------- */
 
 const DB_NAME = "JsArrayTableEditorDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise;
 
 function openDb() {
@@ -322,6 +341,9 @@ function openDb() {
       if (!db.objectStoreNames.contains("cells")) {
         const store = db.createObjectStore("cells", { keyPath: ["fileKey", "row", "col"] });
         store.createIndex("byFile", "fileKey", { unique: false });
+      }
+      if (!db.objectStoreNames.contains("snapshots")) {
+        db.createObjectStore("snapshots", { keyPath: "fileKey" });
       }
     };
 
@@ -388,7 +410,7 @@ async function clearSavedEdits() {
   const db = await openDb();
 
   await new Promise((resolve, reject) => {
-    const tx = db.transaction(["cells", "files"], "readwrite");
+    const tx = db.transaction(["cells", "files", "snapshots"], "readwrite");
     const cells = tx.objectStore("cells").index("byFile");
     const req = cells.openKeyCursor(IDBKeyRange.only(state.fileKey));
     req.onsuccess = () => {
@@ -398,6 +420,7 @@ async function clearSavedEdits() {
       cursor.continue();
     };
     tx.objectStore("files").delete(state.fileKey);
+    tx.objectStore("snapshots").delete(state.fileKey);
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
@@ -412,19 +435,15 @@ async function clearSavedEdits() {
 }
 
 function queueCellSave(row, col, value, inputElement) {
-  setStatus("busy", "Saving...");
+  setStatus("busy", "Saving edit...");
 
-  // One IndexedDB transaction per edit. No debounce: this is deliberate,
-  // so the edit is committed as soon as possible for power-loss protection.
-  saveCell(state.fileKey, row, col, value)
+  saveEditAndSnapshot(row, col, value)
     .then(() => {
       inputElement.classList.remove("dirty");
-      setStatus("saved", "All changes saved locally");
     })
     .catch(error => {
-      console.error(error);
       inputElement.classList.add("dirty");
-      setStatus("error", "Could not save this edit");
+      console.error(error);
     });
 }
 
@@ -655,7 +674,8 @@ function resetState() {
   state = {
     fileName: "", fileKey: "", variableName: "padyamData", rows: [],
     filteredIndexes: [], page: 1, pageSize: Number(els.pageSize.value),
-    search: "", originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false
+    search: "", originalText: "", selectedEditColumn: null, anyColumnEditEnabled: false,
+    lastSavedAt: null, pendingWrites: 0, writeQueue: Promise.resolve()
   };
   updateButtons(false);
   els.dataTable.hidden = true;
@@ -665,6 +685,194 @@ function resetState() {
 
 function jsString(value) {
   return JSON.stringify(String(value ?? ""));
+}
+
+function countEditedCells(rows) {
+  let count = 0;
+  for (const row of rows) {
+    for (let col = 6; col <= 8; col++) {
+      if (String(row[col] ?? "") !== "") count++;
+    }
+    // Count edits in original columns only when they differ from the
+    // original source values is not available as a separate baseline here.
+    // The snapshot still contains every value and is the recovery source.
+  }
+  return count;
+}
+
+async function saveSnapshot() {
+  if (!state.fileKey || !state.rows.length) return;
+
+  const snapshot = {
+    fileKey: state.fileKey,
+    fileName: state.fileName,
+    variableName: state.variableName,
+    rows: state.rows.map(row => row.slice()),
+    updatedAt: Date.now(),
+    editedCells: countEditedCells(state.rows)
+  };
+
+  const db = await openDb();
+
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(["files", "snapshots"], "readwrite");
+
+    tx.objectStore("files").put({
+      fileKey: state.fileKey,
+      fileName: state.fileName,
+      variableName: state.variableName,
+      updatedAt: snapshot.updatedAt,
+      rowCount: state.rows.length
+    });
+
+    tx.objectStore("snapshots").put(snapshot);
+
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Snapshot transaction aborted"));
+  });
+
+  state.lastSavedAt = snapshot.updatedAt;
+}
+
+async function loadSnapshot(fileKey) {
+  const db = await openDb();
+
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction("snapshots", "readonly");
+    const req = tx.objectStore("snapshots").get(fileKey);
+
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveEditAndSnapshot(row, col, value) {
+  // Queue writes so rapid typing cannot cause overlapping transactions
+  // to finish out of order.
+  state.pendingWrites++;
+
+  state.writeQueue = state.writeQueue
+    .then(async () => {
+      const db = await openDb();
+
+      // Transaction 1: persist the individual cell and metadata.
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(["files", "cells"], "readwrite");
+        tx.objectStore("files").put({
+          fileKey: state.fileKey,
+          fileName: state.fileName,
+          variableName: state.variableName,
+          updatedAt: Date.now(),
+          rowCount: state.rows.length
+        });
+        tx.objectStore("cells").put({
+          fileKey: state.fileKey,
+          row,
+          col,
+          value,
+          updatedAt: Date.now()
+        });
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error("Cell save aborted"));
+      });
+
+      // Transaction 2: save the complete current table.
+      await saveSnapshot();
+
+      state.pendingWrites--;
+      setStatus("saved", `SAVED • ${state.pendingWrites ? state.pendingWrites + " write(s) pending" : "recovery copy current"}`);
+    })
+    .catch(error => {
+      state.pendingWrites = Math.max(0, state.pendingWrites - 1);
+      console.error(error);
+      setStatus("error", "SAVE FAILED — do not close this page");
+      throw error;
+    });
+
+  return state.writeQueue;
+}
+
+async function flushPendingWrites() {
+  try {
+    await state.writeQueue;
+  } catch (_) {
+    // Error is already reflected in the status.
+  }
+}
+
+function makeJsOutput() {
+  const body = state.rows.map(row => {
+    const values = row.map(value => {
+      if (typeof value === "number") return String(value);
+      if (typeof value === "boolean") return String(value);
+      if (value === null) return "null";
+      return jsString(value);
+    });
+    return "  [" + values.join(", ") + "]";
+  }).join(",\n");
+
+  return `// Exported by JS Array Table Editor
+// Original source: ${state.fileName}
+var ${state.variableName} = [
+${body}
+];
+`;
+}
+
+function downloadBackup() {
+  if (!state.rows.length) return;
+
+  const backup = {
+    format: "JS Array Table Editor Backup",
+    version: 2,
+    sourceFile: state.fileName,
+    variableName: state.variableName,
+    savedAt: new Date().toISOString(),
+    rows: state.rows
+  };
+
+  downloadText(
+    JSON.stringify(backup),
+    `${state.fileName.replace(/\.[^.]+$/, "")}_backup.json`,
+    "application/json;charset=utf-8"
+  );
+
+  setStatus("saved", "Backup downloaded");
+}
+
+async function restoreFromBackup(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+
+    if (!backup || !Array.isArray(backup.rows)) {
+      throw new Error("This is not a valid editor backup.");
+    }
+
+    if (!confirm(
+      `Restore ${backup.rows.length.toLocaleString()} rows from this backup?\\n\\n` +
+      "The current table will be replaced. This action can be undone only by restoring another backup."
+    )) return;
+
+    state.rows = backup.rows.map(row => normalizeRow(row));
+    if (backup.variableName) state.variableName = backup.variableName;
+
+    // Save restored state immediately.
+    await saveSnapshot();
+
+    setStatus("saved", "Backup restored and saved");
+    render();
+  } catch (error) {
+    console.error(error);
+    setStatus("error", "Backup restore failed");
+    alert("Could not restore the backup.\\n\\n" + error.message);
+  }
 }
 
 async function clearEntireIndexedDb() {
@@ -689,31 +897,18 @@ async function clearEntireIndexedDb() {
   }
 }
 
-function exportJs() {
+async function exportJs() {
   if (!state.rows.length) return;
 
-  const body = state.rows.map(row => {
-    const values = row.map(value => {
-      if (typeof value === "number") return String(value);
-      if (typeof value === "boolean") return String(value);
-      if (value === null) return "null";
-      return jsString(value);
-    });
+  // Never export until all queued IndexedDB writes have completed.
+  await flushPendingWrites();
 
-    return "  [" + values.join(", ") + "]";
-  }).join(",\n");
+  if (state.pendingWrites !== 0) {
+    alert("Some edits are still being saved. Please wait until the status shows SAVED, then try again.");
+    return;
+  }
 
-  const output =
-`// Exported by JS Array Table Editor
-// Original source: ${state.fileName}
-// Original fields: 6
-// Added fields: ${EXTRA_COLUMNS.join(", ")}
-var ${state.variableName} = [
-${body}
-];
-
-`;
-
+  const output = makeJsOutput();
   const base = state.fileName.replace(/\.[^.]+$/, "") || "array";
   downloadText(output, `${base}_edited.js`, "text/javascript;charset=utf-8");
   setStatus("saved", "New JS file exported");
@@ -757,3 +952,12 @@ async function sha256(text) {
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+
+/* Best-effort final flush. The important protection is that every edit is
+   already queued immediately; pagehide only waits for any currently running
+   IndexedDB transaction when the browser allows it. */
+window.addEventListener("pagehide", () => {
+  // Do not start a new write here. Existing IndexedDB transactions are already
+  // durable; this handler intentionally avoids unreliable unload-time work.
+});
