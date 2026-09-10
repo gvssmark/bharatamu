@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padyam Ardha / Bhava / Visesham Cleanup Editor</title>
+<style>
+  :root{
+    --paper:#FBF6EC;
+    --paper-raised:#FFFFFF;
+    --ink:#2A2118;
+    --ink-soft:#5B5040;
+    --maroon:#7A2E2E;
+    --maroon-dark:#5E2323;
+    --olive:#6B6B45;
+    --line:#DED0AE;
+    --field-border:#C9B896;
+    --field-focus:#7A2E2E;
+    --muted:#8A7F68;
+    --danger:#A33;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans Telugu",sans-serif;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .telugu, .padyam-text, .field-input{
+    font-family:"Noto Serif Telugu","Noto Serif",Georgia,"Noto Sans Telugu",serif;
+  }
+
+  /* ---------- Load screen ---------- */
+  #loadScreen{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .load-card{
+    max-width:460px;
+    width:100%;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:36px 32px;
+    text-align:center;
+  }
+  .load-card h1{
+    font-size:1.35rem;
+    margin:0 0 8px;
+    color:var(--maroon-dark);
+    font-weight:600;
+  }
+  .load-card p{
+    color:var(--ink-soft);
+    font-size:0.92rem;
+    line-height:1.5;
+    margin:0 0 24px;
+  }
+  .file-drop{
+    border:1.5px dashed var(--field-border);
+    border-radius:6px;
+    padding:28px 16px;
+    cursor:pointer;
+    color:var(--muted);
+    font-size:0.9rem;
+    transition:border-color .15s, background .15s;
+  }
+  .file-drop:hover, .file-drop.dragover{
+    border-color:var(--maroon);
+    background:#FFFBF2;
+  }
+  .file-drop input{display:none;}
+  #loadError{
+    color:var(--danger);
+    font-size:0.85rem;
+    margin-top:16px;
+    display:none;
+  }
+
+  /* ---------- Resume modal ---------- */
+  .overlay{
+    position:fixed; inset:0;
+    background:rgba(42,33,24,0.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+    padding:20px;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--paper-raised);
+    border-radius:6px;
+    max-width:420px;
+    width:100%;
+    padding:28px;
+    border:1px solid var(--line);
+  }
+  .modal h2{
+    margin:0 0 10px;
+    font-size:1.1rem;
+    color:var(--maroon-dark);
+  }
+  .modal p{
+    font-size:0.9rem;
+    color:var(--ink-soft);
+    line-height:1.5;
+    margin:0 0 20px;
+  }
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    justify-content:flex-end;
+  }
+
+  /* ---------- Buttons ---------- */
+  button{
+    font-family:inherit;
+    font-size:0.88rem;
+    border-radius:5px;
+    border:1px solid transparent;
+    padding:9px 18px;
+    cursor:pointer;
+    transition:background .15s, opacity .15s, border-color .15s;
+  }
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-primary{background:var(--maroon); color:#fff;}
+  .btn-primary:hover:not(:disabled){background:var(--maroon-dark);}
+  .btn-secondary{background:transparent; color:var(--ink); border-color:var(--field-border);}
+  .btn-secondary:hover:not(:disabled){border-color:var(--maroon); color:var(--maroon-dark);}
+  .btn-ghost{background:transparent; color:var(--muted); border:none; text-decoration:underline; padding:4px 6px;}
+
+  /* ---------- Editor shell ---------- */
+  #editor{display:none; flex:1; flex-direction:column; min-height:100vh;}
+  #editor.show{display:flex;}
+
+  .topbar{
+    position:sticky; top:0; z-index:10;
+    background:var(--paper-raised);
+    border-bottom:1px solid var(--line);
+    padding:12px 20px;
+  }
+  .topbar-row1{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:12px;
+    max-width:900px;
+    margin:0 auto;
+  }
+  .location-fields{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 16px;
+    font-size:0.85rem;
+    color:var(--ink-soft);
+  }
+  .location-fields b{color:var(--ink); font-weight:600;}
+  .file-name-tag{font-size:0.78rem; color:var(--muted);}
+  .change-file-link{font-size:0.78rem;}
+
+  .progress-bar{
+    max-width:900px;
+    margin:8px auto 0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:0.82rem;
+    color:var(--muted);
+  }
+  .progress-bar input[type="number"]{
+    width:64px;
+    padding:3px 6px;
+    border:1px solid var(--field-border);
+    border-radius:4px;
+    font-size:0.82rem;
+    text-align:center;
+  }
+  .progress-track{
+    flex:1;
+    height:4px;
+    background:var(--line);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .progress-fill{height:100%; background:var(--maroon); width:0%;}
+
+  /* ---------- Main content: fills remaining space so tabs get full working room ---------- */
+  .content{
+    flex:1;
+    max-width:900px;
+    width:100%;
+    margin:0 auto;
+    padding:16px 20px 12px;
+    display:flex;
+    flex-direction:column;
+    min-height:0; /* allow children to shrink/grow within flex parent */
+  }
+
+  .readonly-block{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:10px 16px;
+    margin-bottom:14px;
+    flex-shrink:0;
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+  }
+  .padyam-meta{
+    font-size:0.78rem;
+    color:var(--olive);
+    font-weight:600;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  /* padyamText limited to a single row: no wrapping, horizontal scroll if long */
+  .padyam-text{
+    font-size:1.02rem;
+    line-height:1.5;
+    white-space:nowrap;
+    overflow-x:auto;
+    overflow-y:hidden;
+    color:var(--ink);
+    flex:1;
+    min-width:0;
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs{
+    display:flex;
+    gap:4px;
+    flex-shrink:0;
+    margin-bottom:10px;
+    border-bottom:1px solid var(--line);
+  }
+  .tab-btn{
+    background:transparent;
+    border:1px solid transparent;
+    border-bottom:none;
+    border-radius:6px 6px 0 0;
+    padding:9px 18px;
+    font-size:0.88rem;
+    font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+    position:relative;
+    top:1px;
+  }
+  .tab-btn.active{
+    color:var(--maroon-dark);
+    background:var(--paper-raised);
+    border-color:var(--line);
+  }
+  .tab-btn .tab-dot{
+    display:inline-block;
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--olive);
+    margin-left:6px;
+    vertical-align:middle;
+    opacity:0;
+  }
+  .tab-btn .tab-dot.has-text{opacity:1;}
+
+  .tab-panels{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+  .tab-panel{
+    display:none;
+    flex:1;
+    min-height:0;
+    flex-direction:column;
+  }
+  .tab-panel.active{display:flex;}
+  .tab-panel label{
+    display:block;
+    font-size:0.8rem;
+    font-weight:600;
+    color:var(--maroon-dark);
+    margin-bottom:6px;
+    flex-shrink:0;
+  }
+  .field-input{
+    flex:1;
+    width:100%;
+    min-height:120px;
+    padding:14px 16px;
+    border:1px solid var(--field-border);
+    border-radius:5px;
+    font-size:1.1rem;
+    line-height:1.7;
+    resize:none;
+    background:var(--paper-raised);
+    color:var(--ink);
+  }
+  .field-input:focus{
+    outline:none;
+    border-color:var(--field-focus);
+    box-shadow:0 0 0 2px rgba(122,46,46,0.12);
+  }
+
+  .statusbar{
+    max-width:900px;
+    margin:0 auto;
+    padding:0 20px 8px;
+    font-size:0.76rem;
+    color:var(--muted);
+    text-align:center;
+    flex-shrink:0;
+  }
+  .statusbar.saving{color:var(--olive);}
+
+  .footer{
+    position:sticky; bottom:0;
+    background:var(--paper-raised);
+    border-top:1px solid var(--line);
+    padding:14px 20px;
+    flex-shrink:0;
+  }
+  .footer-inner{
+    max-width:900px;
+    margin:0 auto;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+  .footer-inner .nav-buttons{display:flex; gap:8px;}
+
+  @media (max-width:480px){
+    .footer-inner{flex-wrap:wrap;}
+    .readonly-block{flex-direction:column; align-items:stretch; gap:4px;}
+    .tab-btn{padding:8px 12px; font-size:0.8rem;}
+  }
+</style>
+</head>
+<body>
+
+  <!-- ============ LOAD SCREEN ============ -->
+  <div id="loadScreen">
+    <div class="load-card">
+      <h1>Padyam Ardha / Bhava / Visesham Cleanup</h1>
+      <p>Choose the padyam data file (e.g. <code>01Adi.js</code>) to review and correct the Pratipadardha, Bhava and Visesham columns. Your progress is saved automatically in this browser as you type. This tool keeps its own separate saved progress, so it will not overwrite progress saved by the original annotation editor.</p>
+      <label class="file-drop" id="fileDrop">
+        <span id="fileDropLabel">Click to choose a .js file, or drop it here</span>
+        <input type="file" id="fileInput" accept=".js">
+      </label>
+      <div id="loadError"></div>
+    </div>
+  </div>
+
+  <!-- ============ RESUME MODAL ============ -->
+  <div class="overlay" id="resumeOverlay">
+    <div class="modal">
+      <h2>Unsaved progress found</h2>
+      <p id="resumeText"></p>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="startFreshBtn">Start from selected file</button>
+        <button class="btn-primary" id="resumeBtn">Resume</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EDITOR ============ -->
+  <div id="editor">
+    <div class="topbar">
+      <div class="topbar-row1">
+        <div class="location-fields" id="locationFields"></div>
+        <div>
+          <span class="file-name-tag" id="fileNameTag"></span>
+          &nbsp;<a href="#" class="change-file-link btn-ghost" id="changeFileLink">Load different file</a>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <span>Row</span>
+        <input type="number" id="jumpInput" min="1">
+        <span id="totalRowsLabel">/ 0</span>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="readonly-block">
+        <div class="padyam-meta" id="padyamMeta"></div>
+        <div class="padyam-text telugu" id="padyamText"></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button type="button" class="tab-btn active" data-tab="pratipadardha">Pratipadardha<span class="tab-dot" id="dotPrati"></span></button>
+        <button type="button" class="tab-btn" data-tab="bhava">Bhava<span class="tab-dot" id="dotBhava"></span></button>
+        <button type="button" class="tab-btn" data-tab="visesham">Visesham<span class="tab-dot" id="dotVisesham"></span></button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" data-panel="pratipadardha">
+          <label for="pratipadardhaInput">Pratipadardha</label>
+          <textarea class="field-input telugu" id="pratipadardhaInput"></textarea>
+        </div>
+        <div class="tab-panel" data-panel="bhava">
+          <label for="bhavaInput">Bhava</label>
+          <textarea class="field-input telugu" id="bhavaInput"></textarea>
+        </div>
+        <div class="tab-panel" data-panel="visesham">
+          <label for="visesbamInput">Visesham</label>
+          <textarea class="field-input telugu" id="visesbamInput"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="statusbar" id="statusBar">&nbsp;</div>
+
+    <div class="footer">
+      <div class="footer-inner">
+        <div class="nav-buttons">
+          <button class="btn-secondary" id="prevBtn">Previous</button>
+          <button class="btn-secondary" id="nextBtn">Next</button>
+        </div>
+        <button class="btn-primary" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- State ----------------
+  var state = {
+    varName: "",
+    originalFileName: "",
+    rows: [],          // each row normalized to 9 columns
+    currentIndex: 0,
+    lastExportedAt: null
+  };
+  var autosaveTimer = null;
+  var pendingFile = null; // {name, parsedRows, varName} awaiting resume decision
+
+  // ---------------- Helpers ----------------
+  function deriveVarName(fileName){
+    var base = fileName.replace(/\.[jJ][sS]$/, "");
+    base = base.replace(/^\d+/, "");
+    return base || "Data";
+  }
+
+  function stripModuleExports(text){
+    return text.replace(
+      /if\s*\(\s*typeof\s+module\s*!==\s*["']undefined["']\s*&&\s*module\.exports\s*\)\s*\{[\s\S]*?\}\s*;?/,
+      ""
+    );
+  }
+
+  function parseArrayFromText(text){
+    var cleaned = stripModuleExports(text);
+    var m = cleaned.match(/(?:const|let|var)\s+\w+\s*=\s*(\[[\s\S]*\])\s*;?\s*$/);
+    if (!m) {
+      throw new Error("Could not find an array declaration (const/let/var NAME = [ ... ];) in this file.");
+    }
+    var arr;
+    try {
+      arr = new Function('"use strict"; return ' + m[1] + ';')();
+    } catch (e) {
+      throw new Error("Found an array declaration but could not parse it as JavaScript: " + e.message);
+    }
+    if (!Array.isArray(arr)) throw new Error("The parsed data is not an array.");
+    return arr;
+  }
+
+  function normalizeRow(row){
+    var r = row.slice(0, 6);
+    while (r.length < 6) r.push("");
+    for (var i = 6; i < 9; i++) {
+      r[i] = (row[i] !== undefined && row[i] !== null) ? String(row[i]) : "";
+    }
+    return r;
+  }
+
+  function cleanText(s){
+    return String(s || "")
+      .replace(/\r\n|\r|\n/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Separate bookmark/draft namespace so this tool never overwrites
+  // progress saved by the original Padyam Annotation Editor.
+  function draftKey(fileName){
+    return "padyamCleanupEditor::" + fileName;
+  }
+
+  function saveDraftNow(){
+    try {
+      var payload = {
+        varName: state.varName,
+        originalFileName: state.originalFileName,
+        rows: state.rows,
+        currentIndex: state.currentIndex,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(draftKey(state.originalFileName), JSON.stringify(payload));
+      setStatus("Autosaved · " + formatTime(payload.updatedAt), false);
+    } catch (e) {
+      setStatus("Autosave failed (browser storage may be full): " + e.message, true);
+    }
+  }
+
+  function scheduleAutosave(){
+    setStatus("Saving…", true);
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(saveDraftNow, 500);
+  }
+
+  function formatTime(ts){
+    var d = new Date(ts);
+    return d.toLocaleTimeString();
+  }
+
+  function setStatus(msg, active){
+    var el = document.getElementById("statusBar");
+    el.textContent = msg;
+    el.className = "statusbar" + (active ? " saving" : "");
+  }
+
+  // ---------------- Loading a file ----------------
+  var fileInput = document.getElementById("fileInput");
+  var fileDrop = document.getElementById("fileDrop");
+  var loadError = document.getElementById("loadError");
+
+  fileDrop.addEventListener("dragover", function(e){ e.preventDefault(); fileDrop.classList.add("dragover"); });
+  fileDrop.addEventListener("dragleave", function(){ fileDrop.classList.remove("dragover"); });
+  fileDrop.addEventListener("drop", function(e){
+    e.preventDefault();
+    fileDrop.classList.remove("dragover");
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+  fileInput.addEventListener("change", function(){
+    if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(file){
+    loadError.style.display = "none";
+    var reader = new FileReader();
+    reader.onload = function(){
+      try {
+        var arr = parseArrayFromText(reader.result);
+        var rows = arr.map(normalizeRow);
+        var varName = deriveVarName(file.name);
+
+        var existingDraftRaw = null;
+        try { existingDraftRaw = localStorage.getItem(draftKey(file.name)); } catch(e){}
+
+        if (existingDraftRaw) {
+          var draft;
+          try { draft = JSON.parse(existingDraftRaw); } catch(e){ draft = null; }
+          if (draft && Array.isArray(draft.rows) && draft.rows.length) {
+            pendingFile = { name: file.name, rows: rows, varName: varName };
+            showResumeModal(draft, file.name);
+            return;
+          }
+        }
+
+        startEditing(varName, file.name, rows, 0);
+      } catch (err) {
+        loadError.textContent = err.message;
+        loadError.style.display = "block";
+      }
+    };
+    reader.onerror = function(){
+      loadError.textContent = "Could not read the file.";
+      loadError.style.display = "block";
+    };
+    reader.readAsText(file);
+  }
+
+  // ---------------- Resume modal ----------------
+  var resumeOverlay = document.getElementById("resumeOverlay");
+  var resumeText = document.getElementById("resumeText");
+  var resumeBtn = document.getElementById("resumeBtn");
+  var startFreshBtn = document.getElementById("startFreshBtn");
+
+  function showResumeModal(draft, fileName){
+    var rowNum = (draft.currentIndex || 0) + 1;
+    var total = draft.rows.length;
+    var when = draft.updatedAt ? formatTime(draft.updatedAt) : "an earlier session";
+    resumeText.textContent = "Found saved progress for \"" + fileName + "\" — at row " + rowNum + " of " + total + ", last saved " + when + ". Resume where you left off, or start fresh from the file you just selected (this will overwrite the saved progress)?";
+    resumeOverlay.classList.add("show");
+
+    resumeBtn.onclick = function(){
+      resumeOverlay.classList.remove("show");
+      startEditing(draft.varName, draft.originalFileName, draft.rows, draft.currentIndex || 0);
+    };
+    startFreshBtn.onclick = function(){
+      resumeOverlay.classList.remove("show");
+      startEditing(pendingFile.varName, pendingFile.name, pendingFile.rows, 0);
+    };
+  }
+
+  // ---------------- Editor ----------------
+  var loadScreen = document.getElementById("loadScreen");
+  var editor = document.getElementById("editor");
+  var locationFields = document.getElementById("locationFields");
+  var fileNameTag = document.getElementById("fileNameTag");
+  var padyamMeta = document.getElementById("padyamMeta");
+  var padyamText = document.getElementById("padyamText");
+  var pratipadardhaInput = document.getElementById("pratipadardhaInput");
+  var bhavaInput = document.getElementById("bhavaInput");
+  var visesbamInput = document.getElementById("visesbamInput");
+  var prevBtn = document.getElementById("prevBtn");
+  var nextBtn = document.getElementById("nextBtn");
+  var saveBtn = document.getElementById("saveBtn");
+  var jumpInput = document.getElementById("jumpInput");
+  var totalRowsLabel = document.getElementById("totalRowsLabel");
+  var progressFill = document.getElementById("progressFill");
+  var changeFileLink = document.getElementById("changeFileLink");
+
+  // ---------------- Tabs ----------------
+  var tabButtons = document.querySelectorAll(".tab-btn");
+  var tabPanels = document.querySelectorAll(".tab-panel");
+  var dots = {
+    pratipadardha: document.getElementById("dotPrati"),
+    bhava: document.getElementById("dotBhava"),
+    visesham: document.getElementById("dotVisesham")
+  };
+
+  function activateTab(name){
+    tabButtons.forEach(function(btn){
+      btn.classList.toggle("active", btn.getAttribute("data-tab") === name);
+    });
+    tabPanels.forEach(function(panel){
+      panel.classList.toggle("active", panel.getAttribute("data-panel") === name);
+    });
+  }
+
+  tabButtons.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      activateTab(btn.getAttribute("data-tab"));
+    });
+  });
+
+  function updateDots(){
+    dots.pratipadardha.classList.toggle("has-text", pratipadardhaInput.value.trim().length > 0);
+    dots.bhava.classList.toggle("has-text", bhavaInput.value.trim().length > 0);
+    dots.visesham.classList.toggle("has-text", visesbamInput.value.trim().length > 0);
+  }
+
+  function startEditing(varName, fileName, rows, startIndex){
+    state.varName = varName;
+    state.originalFileName = fileName;
+    state.rows = rows;
+    state.currentIndex = Math.min(Math.max(startIndex, 0), rows.length - 1);
+
+    loadScreen.style.display = "none";
+    editor.classList.add("show");
+    fileNameTag.textContent = fileName;
+    jumpInput.max = rows.length;
+    totalRowsLabel.textContent = "/ " + rows.length;
+
+    activateTab("pratipadardha");
+    renderRow();
+    saveDraftNow();
+  }
+
+  function renderRow(){
+    var row = state.rows[state.currentIndex];
+    locationFields.innerHTML =
+      "<span><b>Parva:</b> " + escapeHtml(row[0]) + "</span>" +
+      "<span><b>Asvasa:</b> " + escapeHtml(row[1]) + "</span>" +
+      "<span><b>Header:</b> " + escapeHtml(row[2]) + "</span>";
+
+    padyamMeta.textContent = "Padyam " + row[3] + " · " + row[4];
+    padyamText.textContent = row[5];
+
+    pratipadardhaInput.value = row[6];
+    bhavaInput.value = row[7];
+    visesbamInput.value = row[8];
+    updateDots();
+
+    jumpInput.value = state.currentIndex + 1;
+    progressFill.style.width = (((state.currentIndex + 1) / state.rows.length) * 100) + "%";
+
+    prevBtn.disabled = state.currentIndex === 0;
+    nextBtn.disabled = state.currentIndex === state.rows.length - 1;
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function captureCurrentFields(){
+    var row = state.rows[state.currentIndex];
+    row[6] = pratipadardhaInput.value;
+    row[7] = bhavaInput.value;
+    row[8] = visesbamInput.value;
+  }
+
+  [pratipadardhaInput, bhavaInput, visesbamInput].forEach(function(el){
+    el.addEventListener("input", function(){
+      captureCurrentFields();
+      updateDots();
+      scheduleAutosave();
+    });
+  });
+
+  prevBtn.addEventListener("click", function(){
+    captureCurrentFields();
+    saveDraftNow();
+    if (state.currentIndex > 0) {
+      state.currentIndex--;
+      renderRow();
+    }
+  });
+
+  nextBtn.addEventListener("click", function(){
+    captureCurrentFields();
+    saveDraftNow();
+    if (state.currentIndex < state.rows.length - 1) {
+      state.currentIndex++;
+      activateTab("pratipadardha");
+      renderRow();
+    }
+  });
+
+  jumpInput.addEventListener("change", function(){
+    var n = parseInt(jumpInput.value, 10);
+    if (isNaN(n)) { jumpInput.value = state.currentIndex + 1; return; }
+    n = Math.min(Math.max(n, 1), state.rows.length);
+    captureCurrentFields();
+    saveDraftNow();
+    state.currentIndex = n - 1;
+    renderRow();
+  });
+
+  changeFileLink.addEventListener("click", function(e){
+    e.preventDefault();
+    captureCurrentFields();
+    saveDraftNow();
+    editor.classList.remove("show");
+    loadScreen.style.display = "flex";
+    fileInput.value = "";
+  });
+
+  window.addEventListener("beforeunload", function(){
+    if (editor.classList.contains("show")) {
+      captureCurrentFields();
+      saveDraftNow();
+    }
+  });
+
+  saveBtn.addEventListener("click", function(){
+    captureCurrentFields();
+
+    // Clean the 3 editable columns across ALL rows before export.
+    state.rows.forEach(function(row){
+      row[6] = cleanText(row[6]);
+      row[7] = cleanText(row[7]);
+      row[8] = cleanText(row[8]);
+    });
+    renderRow(); // reflect cleaned text back into the visible fields
+
+    var lines = state.rows.map(function(r){ return "  " + JSON.stringify(r); });
+    var exportText = "var " + state.varName + " = [\n" + lines.join(",\n") + "\n];\n";
+
+    var blob = new Blob([exportText], { type: "text/javascript" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = state.varName + "_edited.js";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    state.lastExportedAt = Date.now();
+    saveDraftNow();
+    setStatus("Exported " + state.varName + "_edited.js at " + formatTime(state.lastExportedAt), false);
+  });
+
+})();
+</script>
+</body>
+</html>
