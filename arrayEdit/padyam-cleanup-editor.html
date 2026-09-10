@@ -874,7 +874,7 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = state.varName + "_edited.js";
+    a.download = state.originalFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
