@@ -119,23 +119,6 @@
     gap:10px;
     justify-content:flex-end;
   }
-  .modal-wide{max-width:560px;}
-  .manage-intro{font-size:0.85rem; color:var(--ink-soft); line-height:1.5; margin:0 0 14px; text-align:left;}
-  .manage-list{max-height:340px; overflow-y:auto; text-align:left; border-top:1px solid var(--line);}
-  .manage-row{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:12px;
-    padding:10px 2px;
-    border-bottom:1px solid var(--line);
-  }
-  .manage-row-name{font-weight:600; font-size:0.9rem; word-break:break-all;}
-  .manage-row-meta{font-size:0.76rem; color:var(--muted); margin-top:2px;}
-  .manage-row-current{color:var(--olive); font-weight:600;}
-  .manage-empty{font-size:0.85rem; color:var(--muted); padding:14px 2px; text-align:left;}
-  .manage-total{font-size:0.8rem; color:var(--ink-soft); margin:10px 0 0; text-align:left;}
-  .manage-link{font-size:0.78rem; margin-top:14px; display:inline-block;}
 
   /* ---------- Buttons ---------- */
   button{
@@ -307,20 +290,6 @@
         <input type="file" id="fileInput" accept=".js">
       </label>
       <div id="loadError"></div>
-      <a href="#" class="manage-link btn-ghost" id="openManageFromLoad">Manage saved drafts</a>
-    </div>
-  </div>
-
-  <!-- ============ MANAGE SAVED DRAFTS MODAL ============ -->
-  <div class="overlay" id="manageOverlay">
-    <div class="modal modal-wide">
-      <h2>Saved drafts in this tool</h2>
-      <p class="manage-intro">Stored in this browser's IndexedDB, separate from the cleanup editor. Delete a file once you've exported it and no longer need to reopen it here.</p>
-      <div class="manage-list" id="manageList"></div>
-      <div class="manage-total" id="manageTotal"></div>
-      <div class="modal-actions">
-        <button class="btn-secondary" id="closeManageBtn">Close</button>
-      </div>
     </div>
   </div>
 
@@ -344,7 +313,6 @@
         <div>
           <span class="file-name-tag" id="fileNameTag"></span>
           &nbsp;<a href="#" class="change-file-link btn-ghost" id="changeFileLink">Load different file</a>
-          &nbsp;<a href="#" class="change-file-link btn-ghost" id="openManageFromEditor">Manage saved drafts</a>
         </div>
       </div>
       <div class="progress-bar">
@@ -449,91 +417,24 @@
       .trim();
   }
 
-  // ---------------- IndexedDB storage ----------------
-  // Own database for this tool, kept entirely separate from the
-  // cleanup editor's database — neither reads nor writes the other's data.
-  var DB_NAME = "PadyamEditorDB";
-  var STORE_NAME = "drafts";
-  var dbPromise = null;
-
-  function openDB(){
-    if (dbPromise) return dbPromise;
-    dbPromise = new Promise(function(resolve, reject){
-      var req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = function(e){
-        var db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-      };
-      req.onsuccess = function(e){ resolve(e.target.result); };
-      req.onerror = function(e){ reject(e.target.error); };
-    });
-    return dbPromise;
-  }
-
-  function idbGet(key){
-    return openDB().then(function(db){
-      return new Promise(function(resolve, reject){
-        var tx = db.transaction(STORE_NAME, "readonly");
-        var req = tx.objectStore(STORE_NAME).get(key);
-        req.onsuccess = function(){ resolve(req.result || null); };
-        req.onerror = function(){ reject(req.error); };
-      });
-    });
-  }
-
-  function idbSet(key, value){
-    return openDB().then(function(db){
-      return new Promise(function(resolve, reject){
-        var tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put(value, key);
-        tx.oncomplete = function(){ resolve(); };
-        tx.onerror = function(){ reject(tx.error); };
-      });
-    });
-  }
-
-  function idbDelete(key){
-    return openDB().then(function(db){
-      return new Promise(function(resolve, reject){
-        var tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).delete(key);
-        tx.oncomplete = function(){ resolve(); };
-        tx.onerror = function(){ reject(tx.error); };
-      });
-    });
-  }
-
-  function idbListEntries(){
-    return openDB().then(function(db){
-      return new Promise(function(resolve, reject){
-        var tx = db.transaction(STORE_NAME, "readonly");
-        var store = tx.objectStore(STORE_NAME);
-        var keysReq = store.getAllKeys();
-        var valsReq = store.getAll();
-        var keys, vals;
-        function check(){
-          if (keys && vals) resolve(keys.map(function(k, i){ return { key: k, value: vals[i] }; }));
-        }
-        keysReq.onsuccess = function(){ keys = keysReq.result; check(); };
-        valsReq.onsuccess = function(){ vals = valsReq.result; check(); };
-        tx.onerror = function(){ reject(tx.error); };
-      });
-    });
+  function draftKey(fileName){
+    return "padyamEditor::" + fileName;
   }
 
   function saveDraftNow(){
-    var payload = {
-      varName: state.varName,
-      originalFileName: state.originalFileName,
-      rows: state.rows,
-      currentIndex: state.currentIndex,
-      updatedAt: Date.now()
-    };
-    idbSet(state.originalFileName, payload).then(function(){
+    try {
+      var payload = {
+        varName: state.varName,
+        originalFileName: state.originalFileName,
+        rows: state.rows,
+        currentIndex: state.currentIndex,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(draftKey(state.originalFileName), JSON.stringify(payload));
       setStatus("Autosaved · " + formatTime(payload.updatedAt), false);
-    }).catch(function(e){
-      setStatus("Autosave failed: " + e.message, true);
-    });
+    } catch (e) {
+      setStatus("Autosave failed (browser storage may be full): " + e.message, true);
+    }
   }
 
   function scheduleAutosave(){
@@ -580,16 +481,20 @@
         var rows = arr.map(normalizeRow);
         var varName = deriveVarName(file.name);
 
-        idbGet(file.name).then(function(draft){
+        var existingDraftRaw = null;
+        try { existingDraftRaw = localStorage.getItem(draftKey(file.name)); } catch(e){}
+
+        if (existingDraftRaw) {
+          var draft;
+          try { draft = JSON.parse(existingDraftRaw); } catch(e){ draft = null; }
           if (draft && Array.isArray(draft.rows) && draft.rows.length) {
             pendingFile = { name: file.name, rows: rows, varName: varName };
             showResumeModal(draft, file.name);
-          } else {
-            startEditing(varName, file.name, rows, 0);
+            return;
           }
-        }).catch(function(){
-          startEditing(varName, file.name, rows, 0);
-        });
+        }
+
+        startEditing(varName, file.name, rows, 0);
       } catch (err) {
         loadError.textContent = err.message;
         loadError.style.display = "block";
@@ -772,67 +677,6 @@
     saveDraftNow();
     setStatus("Exported " + state.varName + "_edited.js at " + formatTime(state.lastExportedAt), false);
   });
-
-  // ---------------- Manage saved drafts ----------------
-  var manageOverlay = document.getElementById("manageOverlay");
-  var manageList = document.getElementById("manageList");
-  var manageTotal = document.getElementById("manageTotal");
-
-  function approxKB(value){
-    return (JSON.stringify(value).length * 2 / 1024);
-  }
-
-  function openManage(){
-    manageOverlay.classList.add("show");
-    renderManageList();
-  }
-  function closeManage(){
-    manageOverlay.classList.remove("show");
-  }
-
-  function renderManageList(){
-    manageList.innerHTML = "<div class=\"manage-empty\">Loading…</div>";
-    idbListEntries().then(function(entries){
-      if (!entries.length) {
-        manageList.innerHTML = "<div class=\"manage-empty\">No saved drafts yet.</div>";
-        manageTotal.textContent = "";
-        return;
-      }
-      entries.sort(function(a, b){ return (b.value.updatedAt || 0) - (a.value.updatedAt || 0); });
-      var totalKB = 0;
-      manageList.innerHTML = "";
-      entries.forEach(function(entry){
-        var kb = approxKB(entry.value);
-        totalKB += kb;
-        var isCurrent = editor.classList.contains("show") && entry.key === state.originalFileName;
-        var row = document.createElement("div");
-        row.className = "manage-row";
-        var rowNum = (entry.value.currentIndex || 0) + 1;
-        var total = (entry.value.rows || []).length;
-        row.innerHTML =
-          "<div>" +
-            "<div class=\"manage-row-name\">" + escapeHtml(entry.key) + (isCurrent ? " <span class=\"manage-row-current\">(currently open)</span>" : "") + "</div>" +
-            "<div class=\"manage-row-meta\">Row " + rowNum + " / " + total + " · " + kb.toFixed(1) + " KB · saved " + (entry.value.updatedAt ? formatTime(entry.value.updatedAt) : "—") + "</div>" +
-          "</div>";
-        var delBtn = document.createElement("button");
-        delBtn.className = "btn-secondary";
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener("click", function(){
-          if (!confirm("Delete the saved draft for \"" + entry.key + "\"? This cannot be undone.")) return;
-          idbDelete(entry.key).then(renderManageList);
-        });
-        row.appendChild(delBtn);
-        manageList.appendChild(row);
-      });
-      manageTotal.textContent = "Total: " + totalKB.toFixed(1) + " KB across " + entries.length + " file" + (entries.length === 1 ? "" : "s") + ".";
-    }).catch(function(e){
-      manageList.innerHTML = "<div class=\"manage-empty\">Could not read saved drafts: " + escapeHtml(e.message) + "</div>";
-    });
-  }
-
-  document.getElementById("openManageFromLoad").addEventListener("click", function(e){ e.preventDefault(); openManage(); });
-  document.getElementById("openManageFromEditor").addEventListener("click", function(e){ e.preventDefault(); openManage(); });
-  document.getElementById("closeManageBtn").addEventListener("click", closeManage);
 
 })();
 </script>
