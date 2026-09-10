@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padyam Ardha / Bhava / Visesham Cleanup Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mandali&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper:#FBF6EC;
@@ -31,7 +34,7 @@
     min-height:100vh;
   }
   .telugu, .padyam-text, .field-input{
-    font-family:"Noto Serif Telugu","Noto Serif",Georgia,"Noto Sans Telugu",serif;
+    font-family:"Mandali","Noto Serif Telugu","Noto Serif",Georgia,"Noto Sans Telugu",serif;
   }
 
   /* ---------- Load screen ---------- */
@@ -289,6 +292,21 @@
   }
   .tab-btn .tab-dot.has-text{opacity:1;}
 
+  .skip-note{
+    display:none;
+    align-items:center;
+    background:#F3EEDD;
+    border:1px solid var(--line);
+    border-left:4px solid var(--olive);
+    border-radius:5px;
+    padding:16px 18px;
+    color:var(--ink-soft);
+    font-size:0.92rem;
+    line-height:1.6;
+    flex:1;
+  }
+  .skip-note b{color:var(--maroon-dark);}
+
   .tab-panels{
     flex:1;
     min-height:0;
@@ -430,13 +448,15 @@
         <div class="padyam-text telugu" id="padyamText"></div>
       </div>
 
+      <div class="skip-note telugu" id="skipNote"></div>
+
       <div class="tabs" id="tabs">
         <button type="button" class="tab-btn active" data-tab="pratipadardha">Pratipadardha<span class="tab-dot" id="dotPrati"></span></button>
         <button type="button" class="tab-btn" data-tab="bhava">Bhava<span class="tab-dot" id="dotBhava"></span></button>
         <button type="button" class="tab-btn" data-tab="visesham">Visesham<span class="tab-dot" id="dotVisesham"></span></button>
       </div>
 
-      <div class="tab-panels">
+      <div class="tab-panels" id="tabPanels">
         <div class="tab-panel active" data-panel="pratipadardha">
           <label for="pratipadardhaInput">Pratipadardha</label>
           <textarea class="field-input telugu" id="pratipadardhaInput"></textarea>
@@ -524,6 +544,54 @@
       .replace(/\r\n|\r|\n/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  // ---------------- OCR bracket-artifact cleanup ----------------
+  // Tesseract's Telugu model sometimes misreads the subjoined-ర hook in
+  // conjuncts (ప్ర/వ్ర/శ్ర/గ్ర/ధ్ర-type) as a literal "(", "[" or "|".
+  // Applied only at Save/export, only to the 3 editable fields.
+  function fixBracketArtifacts(text){
+    if (!text) return text;
+    var teluguRange = "\\u0C00-\\u0C7F";
+
+    // (a) A bracket/pipe sitting directly between two Telugu letters with
+    // no space is always spurious mid-word noise — strip it outright.
+    var midWordRe = new RegExp("(?<=[" + teluguRange + "])[()\\[\\]|]+(?=[" + teluguRange + "])", "g");
+    text = text.replace(midWordRe, "");
+
+    // (b) For whatever "(" ")" "[" "]" remain, do proper stack-based
+    // pair matching: nearest unclosed open matches nearest following
+    // close of the same type. A bracket only survives if it has a real
+    // match; unmatched opens AND unmatched closes are dropped.
+    text = matchBracketsStackBased(text, "(", ")");
+    text = matchBracketsStackBased(text, "[", "]");
+    return text;
+  }
+
+  function matchBracketsStackBased(text, openChar, closeChar){
+    var chars = text.split("");
+    var stack = [];
+    var remove = [];
+    for (var i = 0; i < chars.length; i++) {
+      if (chars[i] === openChar) {
+        stack.push(i);
+      } else if (chars[i] === closeChar) {
+        if (stack.length > 0) {
+          stack.pop(); // matched pair — keep both
+        } else {
+          remove.push(i); // unmatched close — drop
+        }
+      }
+    }
+    while (stack.length) remove.push(stack.pop()); // unmatched opens — drop
+    if (!remove.length) return text;
+    var removeSet = {};
+    remove.forEach(function(i){ removeSet[i] = true; });
+    var out = "";
+    for (var j = 0; j < chars.length; j++) {
+      if (!removeSet[j]) out += chars[j];
+    }
+    return out;
   }
 
   // ---------------- IndexedDB storage ----------------
@@ -724,6 +792,9 @@
   // ---------------- Tabs ----------------
   var tabButtons = document.querySelectorAll(".tab-btn");
   var tabPanels = document.querySelectorAll(".tab-panel");
+  var tabsEl = document.getElementById("tabs");
+  var tabPanelsEl = document.getElementById("tabPanels");
+  var skipNote = document.getElementById("skipNote");
   var dots = {
     pratipadardha: document.getElementById("dotPrati"),
     bhava: document.getElementById("dotBhava"),
@@ -777,6 +848,18 @@
 
     padyamMeta.textContent = "Padyam " + row[3] + " · " + row[4];
     padyamText.textContent = row[5];
+
+    var isSeeLine = String(row[4] || "").trim() === "సీ.";
+    if (isSeeLine) {
+      skipNote.style.display = "flex";
+      skipNote.innerHTML = "This is a <b>సీ.</b> line — its pratipadardha, bhava and visesham are captured together with the <b>next</b> padyam, not here. This line is still saved in the output file as-is. Click <b>Next</b> to continue.";
+      tabsEl.style.display = "none";
+      tabPanelsEl.style.display = "none";
+    } else {
+      skipNote.style.display = "none";
+      tabsEl.style.display = "";
+      tabPanelsEl.style.display = "";
+    }
 
     pratipadardhaInput.value = row[6];
     bhavaInput.value = row[7];
@@ -861,9 +944,9 @@
 
     // Clean the 3 editable columns across ALL rows before export.
     state.rows.forEach(function(row){
-      row[6] = cleanText(row[6]);
-      row[7] = cleanText(row[7]);
-      row[8] = cleanText(row[8]);
+      row[6] = fixBracketArtifacts(cleanText(row[6]));
+      row[7] = fixBracketArtifacts(cleanText(row[7]));
+      row[8] = fixBracketArtifacts(cleanText(row[8]));
     });
     renderRow(); // reflect cleaned text back into the visible fields
 
