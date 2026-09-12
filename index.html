@@ -785,10 +785,14 @@
       if(isProseType(pt.type)){
         bodyHtml = '<div class="verse-text">' + escapeHtml(pt.lines ? pt.lines.join('\n') : pt.text) + '</div>';
       } else {
+        const isSeesam = pt.type === 'సీ.';
         const segs = [];
         (pt.lines || []).forEach(function(line){
           line.split('|').forEach(function(seg, i){
-            segs.push({ text: seg.trim(), indent: i > 0 });
+            // "|" is always a line break, but the extra indent is specific
+            // to Seesam's first (సీ.) part — not its tail (ఆ./తే.), and not
+            // any other meter type that might happen to contain "|".
+            segs.push({ text: seg.trim(), indent: isSeesam && i > 0 });
           });
         });
         bodyHtml = '<div class="verse-text">' + segs.map(function(seg){
