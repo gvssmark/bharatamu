@@ -204,14 +204,6 @@
     font-family: var(--reader-font), 'Noto Serif Telugu', serif;
     font-size: var(--verse-size); line-height:1.75; white-space:pre-line;
   }
-  /* Non-prose meter lines (everything except వ./గద్య.): each physical line
-     (and each half split out of a "|") renders as its own block so it can
-     carry its own alternating color and indentation. */
-  .vline{
-    white-space: pre-wrap; /* preserves the literal indent spaces, unlike the pre-line above */
-  }
-  .vline-a{ color: var(--ink); }
-  .vline-b{ color: var(--rust-dark); }
 
   .meaning-pane{
     flex: 1 1 45%; min-height:0; display:flex; flex-direction:column;
@@ -771,36 +763,11 @@
     });
   }
 
-  function isProseType(type){
-    return type === 'వ.' || type === 'గద్య.';
-  }
-
   function renderParts(s){
-    // lineCounter runs across ALL of this padyam's non-prose parts (not reset
-    // per part), so a merged సీ.+ఆ./తే. padyam keeps one continuous
-    // odd/even color sequence across both halves.
-    let lineCounter = 0;
     return s.parts.map(function(pt){
-      let bodyHtml;
-      if(isProseType(pt.type)){
-        bodyHtml = '<div class="verse-text">' + escapeHtml(pt.lines ? pt.lines.join('\n') : pt.text) + '</div>';
-      } else {
-        const segs = [];
-        (pt.lines || []).forEach(function(line){
-          line.split('|').forEach(function(seg, i){
-            segs.push({ text: seg.trim(), indent: i > 0 });
-          });
-        });
-        bodyHtml = '<div class="verse-text">' + segs.map(function(seg){
-          lineCounter++;
-          const colorClass = (lineCounter % 2 === 1) ? 'vline-a' : 'vline-b';
-          const text = (seg.indent ? '     ' : '') + seg.text;
-          return '<div class="vline ' + colorClass + '">' + escapeHtml(text) + '</div>';
-        }).join('') + '</div>';
-      }
       return '<div class="verse-part">' +
         (s.parts.length > 1 ? '<div class="ptype">' + escapeHtml(pt.type) + '</div>' : '') +
-        bodyHtml +
+        '<div class="verse-text">' + escapeHtml(pt.lines ? pt.lines.join('\n') : pt.text) + '</div>' +
         '</div>';
     }).join('');
   }
