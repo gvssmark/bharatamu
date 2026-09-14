@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Array to CSV Exporter</title>
+<style>
+  body{font-family:system-ui;max-width:900px;margin:40px auto;padding:0 20px;background:#f8fafc}
+ .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,.05)}
+ .drop{border:2px dashed #94a3b8;border-radius:12px;padding:28px;text-align:center;background:#f1f5f9;cursor:pointer}
+ .drop.dragover{background:#e0f2fe;border-color:#0ea5e9}
+  textarea{width:100%;min-height:140px;font-family:monospace;font-size:13px;border:1px solid #cbd5e1;border-radius:8px;padding:10px}
+  button{background:#0f172a;color:#fff;border:0;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600}
+  button.secondary{background:#e2e8f0;color:#0f172a}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;display:block;overflow:auto;max-height:360px}
+  th,td{border:1px solid #e2e8f0;padding:6px 8px} th{background:#f1f5f9;position:sticky;top:0}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>JS Array of Arrays → CSV</h1>
+  <div id="drop" class="drop"><strong>Drop.js file here</strong> or click to choose</div>
+  <input type="file" id="fileInput" accept=".js,.txt,.json" style="display:none">
+  <div style="margin:16px 0"><textarea id="jsInput" placeholder='[[&quot;Name&quot;,&quot;Age&quot;],[&quot;Ravi&quot;,28]]'></textarea></div>
+  <div style="display:flex;gap:12px">
+    <button id="parseBtn">Parse</button>
+    <button id="exportBtn" disabled>Export CSV</button>
+    <select id="delim"><option value=",">, comma</option><option value=";">; semicolon</option><option value="&#9;">TAB</option></select>
+    <label><input type="checkbox" id="quoteAll"> Quote all</label>
+  </div>
+  <div id="status" style="margin:10px 0;color:#64748b"></div>
+  <div id="preview"></div>
+</div>
+<script>
+let currentData=null;
+const fileInput=document.getElementById('fileInput'),drop=document.getElementById('drop'),jsInput=document.getElementById('jsInput');
+drop.onclick=()=>fileInput.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('dragover')};
+drop.ondragleave=()=>drop.classList.remove('dragover');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragover');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0])};
+fileInput.onchange=e=>handleFile(e.target.files[0]);
+function handleFile(f){const r=new FileReader();r.onload=()=>{jsInput.value=r.result;parse()};r.readAsText(f)}
+document.getElementById('parseBtn').onclick=parse;
+function parse(){
+ try{
+  let s=jsInput.value.trim().replace(/^(export\s+default\s+)/,'').replace(/^(module\.exports\s*=\s*)/,'').replace(/^(const|let|var)\s+\w+\s*=\s*/,'').replace(/;\s*$/,'');
+  const a=s.indexOf('['),b=s.lastIndexOf(']'); if(a==-1)throw Error('No array found');
+  currentData=Function('"use strict";return ('+s.slice(a,b+1)+')')();
+  document.getElementById('status').textContent=`Parsed ${currentData.length} rows`;
+  let html='<table><tr>';for(let c=0;c<Math.max(...currentData.map(r=>r.length));c++)html+=`<th>Col ${c+1}</th>`;html+='</tr>';
+  currentData.slice(0,100).forEach(r=>{html+='<tr>';r.forEach(v=>html+=`<td>${String(v??'').replace(/</g,'&lt;')}</td>`);html+='</tr>'});
+  html+='</table>';document.getElementById('preview').innerHTML=html;
+  document.getElementById('exportBtn').disabled=false;
+ }catch(e){document.getElementById('status').textContent='Error: '+e.message;document.getElementById('status').style.color='#dc2626'}
+}
+document.getElementById('exportBtn').onclick=()=>{
+ const delim=document.getElementById('delim').value,quoteAll=document.getElementById('quoteAll').checked;
+ const csv=currentData.map(r=>r.map(c=>{let s=String(c??'');const q=quoteAll||s.includes('"')||s.includes(delim)||s.includes('\n');return q?'"'+s.replace(/"/g,'""')+'"':s}).join(delim)).join('\r\n');
+ const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='export.csv';a.click();URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>
